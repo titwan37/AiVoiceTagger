@@ -1,0 +1,50 @@
+# AiVoiceTagger Production & Local Configuration
+
+scanner:
+  input_directory: "C:\\Records"
+  excluded_extensions: [".xlsx", ".csv", ".json", ".tmp", ".bak"]
+  recursive: true
+  min_file_size_bytes: 1024
+
+state_store:
+  db_path: "aivoicetagger_state.db"
+  busy_timeout_ms: 5000
+  journal_mode: "WAL"
+  synchronous: "NORMAL"
+
+decoder:
+  worker_threads: 3
+  target_sample_rate: 16000
+  channels: 1
+
+stt:
+  enabled: true
+  model_path: "models/ggml-small-q5_0.bin"
+  language: "fr"
+  workers: 4
+  threads_per_worker: 3
+  beam_size: 1
+  enable_timestamps: true
+  chunk_length_seconds: 30
+
+sidecar:
+  enabled: true
+  python_executable: "python"
+  script_path: "sidecar/main.py"
+  worker_threads: 3
+  timeout_seconds: 60
+
+exporter:
+  output_directory: "export"
+  export_json: true
+  export_csv: true
+  export_parquet: false
+
+pipeline:
+  max_inflight_audio_mb: 1024
+  max_inflight_chunks: 300
+  max_retries: 5
+
+logging:
+  level: "info"
+  format: "json"

@@ -1,0 +1,20 @@
+[Unit]
+Description=AiVoiceTagger CPU-Optimized Audio Transcription Engine
+After=network.target
+
+[Service]
+Type=simple
+User=aivoice
+WorkingDirectory=/opt/aivoicetagger
+ExecStart=/opt/aivoicetagger/aivoicetagger --config /etc/aivoicetagger/config.yaml
+Restart=always
+RestartSec=10
+Environment="OMP_NUM_THREADS=1"
+Environment="OPENBLAS_NUM_THREADS=1"
+Environment="MKL_NUM_THREADS=1"
+Environment="TOKENIZERS_PARALLELISM=false"
+Environment="POLARS_MAX_THREADS=3"
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

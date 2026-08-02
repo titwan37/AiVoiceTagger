@@ -1,0 +1,39 @@
+# Rust build output
+/target/
+
+# SQLite databases
+*.db
+*.db-wal
+*.db-shm
+aivoicetagger_state.db
+
+# Large model files
+/models/*.bin
+/models/*.onnx
+/models/*.pt
+/models/*.safetensors
+
+# Sample records and generated export data
+/records_sample/*
+!/records_sample/.gitkeep
+/exports/
+*.parquet
+
+# Python / Sidecar
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+ENV/
+
+# IDE / OS metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

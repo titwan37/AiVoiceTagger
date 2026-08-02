@@ -1,0 +1,50 @@
+# Production 20-Core CPU Tuning Configuration for AiVoiceTagger
+
+scanner:
+  input_directory: "C:\\Records\\"
+  excluded_extensions: [".xlsx", ".csv", ".json", ".tmp", ".bak"]
+  recursive: true
+  min_file_size_bytes: 1024
+
+state_store:
+  db_path: "/var/lib/aivoicetagger/state.db"
+  busy_timeout_ms: 10000
+  journal_mode: "WAL"
+  synchronous: "NORMAL"
+
+decoder:
+  worker_threads: 3
+  target_sample_rate: 16000
+  channels: 1
+
+stt:
+  enabled: true
+  model_path: "models/ggml-small-q5_0.bin"
+  language: "fr"
+  workers: 4
+  threads_per_worker: 3
+  beam_size: 1
+  enable_timestamps: true
+  chunk_length_seconds: 30
+
+sidecar:
+  enabled: true
+  python_executable: "python3"
+  script_path: "sidecar/main.py"
+  worker_threads: 3
+  timeout_seconds: 60
+
+exporter:
+  output_directory: "/var/log/aivoicetagger/export"
+  export_json: true
+  export_csv: true
+  export_parquet: true
+
+pipeline:
+  max_inflight_audio_mb: 2048
+  max_inflight_chunks: 500
+  max_retries: 5
+
+logging:
+  level: "info"
+  format: "json"

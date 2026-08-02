@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aivoicetagger-sidecar"
+version = "0.1.0"
+description = "Python AI, Verbatim NLP, and Data Analytics sidecar for AiVoiceTagger"
+authors = [{ name = "AiVoiceTagger Team" }]
+dependencies = [
+    "pydantic>=2.0.0",
+    "polars>=1.0.0",
+    "aiofiles>=24.0.0",
+    "tenacity>=8.0.0",
+    "spacy>=3.7.0",
+]
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
