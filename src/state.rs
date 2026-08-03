@@ -204,4 +204,72 @@ impl StateStore {
 
         Ok(())
     }
+
+    /// Atomically claim an unprocessed record using a lock-free lease.
+    pub fn claim_unprocessed_record(&self, worker_id: &str, lease_duration_secs: i64) -> Result<Option<RecordInfo>> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+
+        let now_ts = Utc::now().timestamp();
+        let lease_expires_ts = now_ts + lease_duration_secs;
+        let now_iso = Utc::now().to_rfc3339();
+
+        let claimed_row: Option<(String, String, String, Option<String>, String, u64)> = tx.query_row(
+            "SELECT record_id, name, directory, date_record_day, date_last_write, length_bytes
+             FROM records
+             WHERE (state = ?1 OR state = ?2) AND (lease_expires_at IS NULL OR lease_expires_at < ?3)
+             LIMIT 1",
+            params![
+                RecordState::Discovered.to_string(),
+                RecordState::Queued.to_string(),
+                now_ts
+            ],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        ).optional()?;
+
+        if let Some((record_id, name, directory, date_record_day_str, date_last_write_str, length_bytes)) = claimed_row {
+            tx.execute(
+                "UPDATE records
+                 SET state = ?1, lease_owner = ?2, lease_expires_at = ?3, updated_at = ?4
+                 WHERE record_id = ?5",
+                params![
+                    RecordState::Queued.to_string(),
+                    worker_id,
+                    lease_expires_ts,
+                    now_iso,
+                    record_id
+                ],
+            )?;
+            tx.commit()?;
+
+            let date_record_day = date_record_day_str
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+                .map(|d| d.with_timezone(&chrono::Utc));
+            let date_last_write = chrono::DateTime::parse_from_rfc3339(&date_last_write_str)
+                .ok()
+                .map(|d| d.with_timezone(&chrono::Utc))
+                .unwrap_or_else(chrono::Utc::now);
+
+            let record = RecordInfo::new(
+                record_id,
+                name,
+                directory,
+                date_record_day,
+                date_last_write,
+                length_bytes,
+            );
+            Ok(Some(record))
+        } else {
+            Ok(None)
+        }
+    }
 }

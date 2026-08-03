@@ -9,6 +9,7 @@ pub struct ScannerConfig {
     pub excluded_extensions: Vec<String>,
     pub recursive: bool,
     pub min_file_size_bytes: u64,
+    pub input_manifest: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +37,10 @@ pub struct SttConfig {
     pub beam_size: usize,
     pub enable_timestamps: bool,
     pub chunk_length_seconds: u32,
+    pub adaptive_multipass: Option<bool>,
+    pub heavy_model_path: Option<String>,
+    pub confidence_threshold: Option<f64>,
+    pub intensity_threshold_rms: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

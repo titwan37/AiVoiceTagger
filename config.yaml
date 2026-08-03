@@ -1,7 +1,8 @@
 # AiVoiceTagger Production & Local Configuration
 
 scanner:
-  input_directory: "C:\\Records"
+  input_directory: "\\\\SyNAS\\Records"
+  input_manifest: "inventory_manifest.csv"
   excluded_extensions: [".xlsx", ".csv", ".json", ".tmp", ".bak"]
   recursive: true
   min_file_size_bytes: 1024
@@ -19,13 +20,17 @@ decoder:
 
 stt:
   enabled: true
-  model_path: "models/ggml-small-q5_0.bin"
+  model_path: "models/ggml-small-q8_0.bin"
   language: "fr"
   workers: 4
   threads_per_worker: 3
   beam_size: 1
   enable_timestamps: true
   chunk_length_seconds: 30
+  adaptive_multipass: true
+  heavy_model_path: "models/ggml-large-v3-q5_0.bin"
+  confidence_threshold: 0.80
+  intensity_threshold_rms: 0.15
 
 sidecar:
   enabled: true

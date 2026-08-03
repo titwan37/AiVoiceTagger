@@ -30,6 +30,70 @@ impl FileScanner {
         })
     }
 
+    /// Automatically scans directory or loads from CSV manifest if configured.
+    pub fn scan_or_load(&self) -> Result<Vec<RecordInfo>> {
+        if let Some(manifest_path) = &self.config.input_manifest {
+            tracing::info!("Loading audio file inventory from CSV manifest: {}", manifest_path);
+            self.load_from_manifest_csv(Path::new(manifest_path))
+        } else {
+            self.scan_directory()
+        }
+    }
+
+    /// Export scanned records inventory to a CSV manifest file.
+    pub fn export_manifest_csv(&self, records: &[RecordInfo], path: &Path) -> Result<()> {
+        let mut writer = csv::Writer::from_path(path)?;
+        writer.write_record(&["record_id", "name", "directory", "length_bytes", "size_human", "date_record_day", "date_last_write"])?;
+        for r in records {
+            writer.write_record(&[
+                &r.record_id,
+                &r.name,
+                &r.directory,
+                &r.length_bytes.to_string(),
+                &r.size_human,
+                &r.date_record_day.map(|d| d.to_rfc3339()).unwrap_or_default(),
+                &r.date_last_write.to_rfc3339(),
+            ])?;
+        }
+        writer.flush()?;
+        Ok(())
+    }
+
+    /// Load records inventory directly from an exported CSV manifest file.
+    pub fn load_from_manifest_csv(&self, path: &Path) -> Result<Vec<RecordInfo>> {
+        let mut reader = csv::Reader::from_path(path)?;
+        let mut records = Vec::new();
+        for result in reader.records() {
+            let record = result?;
+            if record.len() < 7 {
+                continue;
+            }
+            let record_id = record[0].to_string();
+            let name = record[1].to_string();
+            let directory = record[2].to_string();
+            let length_bytes: u64 = record[3].parse().unwrap_or(0);
+            let date_record_day = if !record[5].is_empty() {
+                chrono::DateTime::parse_from_rfc3339(&record[5]).ok().map(|d| d.with_timezone(&chrono::Utc))
+            } else {
+                None
+            };
+            let date_last_write = chrono::DateTime::parse_from_rfc3339(&record[6])
+                .ok()
+                .map(|d| d.with_timezone(&chrono::Utc))
+                .unwrap_or_else(chrono::Utc::now);
+
+            records.push(RecordInfo::new(
+                record_id,
+                name,
+                directory,
+                date_record_day,
+                date_last_write,
+                length_bytes,
+            ));
+        }
+        Ok(records)
+    }
+
     /// Recursively scan the configured input directory and yield metadata records.
     pub fn scan_directory(&self) -> Result<Vec<RecordInfo>> {
         let input_path = Path::new(&self.config.input_directory);

@@ -89,6 +89,20 @@ impl StatsVerbatim {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum QualityGrade {
+    Good,
+    Degraded,
+    Unusable,
+}
+
+impl fmt::Display for QualityGrade {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 /// Core domain record model mapping legacy C# RecordInfo.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RecordInfo {
@@ -106,6 +120,9 @@ pub struct RecordInfo {
     pub stats_verbatim: StatsVerbatim,
     pub state: RecordState,
     pub is_degraded: bool,
+    pub quality_grade: QualityGrade,
+    pub background_noise_detected: bool,
+    pub avg_logprob: f64,
 }
 
 impl RecordInfo {
@@ -133,6 +150,9 @@ impl RecordInfo {
             stats_verbatim: StatsVerbatim::default(),
             state: RecordState::Discovered,
             is_degraded: false,
+            quality_grade: QualityGrade::Good,
+            background_noise_detected: false,
+            avg_logprob: 0.0,
         }
     }
 

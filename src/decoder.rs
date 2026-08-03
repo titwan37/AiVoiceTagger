@@ -17,6 +17,7 @@ pub struct AudioProbeResult {
     pub channels: u16,
     pub pcm_data: Option<Vec<f32>>,
     pub is_degraded: bool,
+    pub rms_intensity: f32,
 }
 
 pub struct AudioDecoder {
@@ -97,12 +98,20 @@ impl AudioDecoder {
                     }
                 }
 
+                let rms_intensity = if !pcm_samples.is_empty() {
+                    let sum_sq: f32 = pcm_samples.iter().map(|s| s * s).sum();
+                    (sum_sq / pcm_samples.len() as f32).sqrt()
+                } else {
+                    0.0
+                };
+
                 Ok(AudioProbeResult {
                     duration_seconds,
                     sample_rate,
                     channels,
                     pcm_data: if decode_samples { Some(pcm_samples) } else { None },
                     is_degraded,
+                    rms_intensity,
                 })
             }
             Err(_) => Ok(self.fallback_result(file_size)),
@@ -116,6 +125,7 @@ impl AudioDecoder {
             channels: self.config.channels,
             pcm_data: None,
             is_degraded: true,
+            rms_intensity: 0.0,
         }
     }
 }
