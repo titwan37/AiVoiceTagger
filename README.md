@@ -175,28 +175,100 @@ cargo run -- --config config.yaml --from-csv inventory_nas.csv
 
 ---
 
-### 3. Parallel Multi-Instance Processing & CPU Kernel Affinity
+### 3. Multi-Machine Parallel Processing & 3-Layer Defense-in-Depth
 
-On high-core machines (e.g. 20-core systems), you can launch multiple parallel instances of `AiVoiceTagger` bound to specific CPU kernel groups.
+When running `AiVoiceTagger` across multiple worker machines (`pc-alpha`, `pc-beta`, etc.) processing audio files on a shared network drive (`\\SyNAS\Records`), follow this step-by-step workflow to ensure 100% collision-free parallel processing.
 
-SQLite WAL task leasing guarantees that worker instances never collide or re-process the same file:
+#### Step 1: Combine Existing Local Databases (Optional)
+
+If your worker machines (`PC1` and `PC2`) have already been running independently with local SQLite databases, merge their progress into the central network database on `\\SyNAS\Records` first:
+
+```powershell
+python scripts/merge_dbs.py --dest "\\SyNAS\Records\aivoicetagger_state.db" --sources "C:\Dev\AiVoiceTagger\aivoicetagger_state_pc1.db" "C:\Dev\AiVoiceTagger\aivoicetagger_state_pc2.db"
+```
+
+> **Note:** The script creates an automatic `.bak` backup file before starting an explicit transaction, deduplicates records by ID, and prioritizes completed processing states.
+
+---
+
+#### Step 2: Generate & Partition the Master Manifest
+
+##### 1. Generate Master Manifest
+
+On **Computer A**, perform a dry-run scan across the shared audio directory:
+
+```powershell
+cargo run --release -- --scan-only --export-manifest inventory_all.csv
+```
+
+##### 2. Split into Balanced CSV Files
+
+Run the PowerShell partitioning script to divide the manifest evenly between your worker nodes using round-robin distribution:
+
+```powershell
+.\scripts\split_manifest.ps1 -ManifestPath inventory_all.csv -NumWorkers 2
+```
+
+This creates `inventory_pc1.csv` and `inventory_pc2.csv` in your working directory. Copy `inventory_pc2.csv` over to Computer B (or keep both on the shared network drive).
+
+---
+
+#### Step 3: Configure Shared Network Database (`config.yaml`)
+
+On **both** computers, update `config.yaml` so they point to the single shared state store on `\\SyNAS`:
+
+```yaml
+state_store:
+  db_path: "\\\\SyNAS\\Records\\aivoicetagger_state.db"
+  busy_timeout_ms: 10000
+  journal_mode: "WAL"
+  synchronous: "NORMAL"
+```
+
+---
+
+#### Step 4: Launch Parallel Processing
+
+Now launch both workers. They will operate with **all 3 layers of protection active** (Manifest Partitioning, `.lock` sidecar files on `\\SyNAS`, and SQLite WAL leases):
+
+##### Computer A (`pc-alpha`):
+
+```powershell
+cargo run --release -- --config config.yaml --from-csv inventory_pc1.csv --worker-id pc-alpha
+```
+
+##### Computer B (`pc-beta`):
+
+```powershell
+cargo run --release -- --config config.yaml --from-csv inventory_pc2.csv --worker-id pc-beta
+```
+
+*(If you omit `--worker-id`, the system automatically detects and uses your computer's system hostname).*
+
+---
+
+#### 🛡️ How the 3 Layers Protect You in Real Time
+
+1. **Layer 3 (Manifests):** Computer A only considers `inventory_pc1.csv` and Computer B considers `inventory_pc2.csv`.
+2. **Layer 2 (Sidecar `.lock`):** Before decoding any audio file, the worker creates an atomic `audio.wav.lock` file containing its worker ID and timestamp. If a lock exists and is $< 30$ minutes old, the file is skipped instantly.
+3. **Layer 1 (SQLite WAL):** SQLite locks individual records with `lease_owner = 'pc-alpha'` and a 10-second busy timeout over SMB to ensure database queries never collide.
+
+---
+
+### 4. Single-Machine Kernel Affinity Pinning
+
+On high-core single machines (e.g. 20-core systems), you can also launch multiple local worker instances bound to specific CPU kernel groups:
 
 #### Terminal 1 (Pinned to CPU Cores 0 to 5)
 
 ```powershell
-cargo run -- --config config.yaml --worker-id node-1 --cpu-affinity 0-5
+cargo run --release -- --config config.yaml --worker-id node-1 --cpu-affinity 0-5
 ```
 
 #### Terminal 2 (Pinned to CPU Cores 6 to 11)
 
 ```powershell
-cargo run -- --config config.yaml --worker-id node-2 --cpu-affinity 6-11
-```
-
-#### Terminal 3 (Pinned to CPU Cores 12 to 17)
-
-```powershell
-cargo run -- --config config.yaml --worker-id node-3 --cpu-affinity 12-17
+cargo run --release -- --config config.yaml --worker-id node-2 --cpu-affinity 6-11
 ```
 
 ---

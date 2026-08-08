@@ -9,7 +9,7 @@ scanner:
 
 state_store:
   db_path: "aivoicetagger_state.db"
-  busy_timeout_ms: 5000
+  busy_timeout_ms: 10000
   journal_mode: "WAL"
   synchronous: "NORMAL"
 
@@ -31,6 +31,28 @@ stt:
   heavy_model_path: "models/ggml-large-v3-q5_0.bin"
   confidence_threshold: 0.80
   intensity_threshold_rms: 0.15
+  triage_model_path: "models/ggml-tiny-q8_0.bin"
+  watchlist_file: "watchlist.txt"
+  watchlist_keywords:
+    - "harcèlement"
+    - "menace"
+    - "insulte"
+    - "avocat"
+    - "police"
+    - "tribunal"
+    - "argent"
+    - "preuve"
+    - "justice"
+    - "chantage"
+    - "dégage"
+    - "va chier"
+    - "va te faire foutre"
+    - "t'es nul"
+    - "un gros nase"
+    - "cagibi"
+    - "casser la gueule"
+    - "ta gueule"
+    - "mon frère"
 
 sidecar:
   enabled: true

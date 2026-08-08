@@ -5,8 +5,8 @@ git init
 git add .
 
 # 3. Create initial commit
-git commit -m "feat: initial commit for AiVoiceTagger Rust core & Python NLP sidecar"
-
+git commit -m "feat: before any architecture change with AiVoiceTagger Rust core & Python NLP sidecar"
+s
 # 4. Set main branch name
 git branch -M main
 

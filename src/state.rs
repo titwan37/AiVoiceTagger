@@ -50,6 +50,7 @@ impl StateStore {
                 last_error TEXT,
                 lease_owner TEXT,
                 lease_expires_at INTEGER,
+                triage_keywords_json TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -92,6 +93,11 @@ impl StateStore {
             );"
         )
         .context("Failed to create SQLite tables")?;
+
+        // Migration: Add triage_keywords_json and triage_summary columns if missing
+        let _ = conn.execute("ALTER TABLE records ADD COLUMN triage_keywords_json TEXT", []);
+        let _ = conn.execute("ALTER TABLE records ADD COLUMN triage_summary TEXT", []);
+
         Ok(())
     }
 
@@ -106,8 +112,8 @@ impl StateStore {
             "INSERT INTO records (
                 record_id, name, directory, date_record_day, date_last_write,
                 length_bytes, duration_seconds, speech_count, story, stats_verbatim_json,
-                state, is_degraded, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)
+                state, is_degraded, triage_summary, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)
             ON CONFLICT(record_id) DO UPDATE SET
                 state = excluded.state,
                 duration_seconds = excluded.duration_seconds,
@@ -115,6 +121,7 @@ impl StateStore {
                 story = excluded.story,
                 stats_verbatim_json = excluded.stats_verbatim_json,
                 is_degraded = excluded.is_degraded,
+                triage_summary = COALESCE(excluded.triage_summary, records.triage_summary),
                 updated_at = excluded.updated_at",
             params![
                 record.record_id,
@@ -129,6 +136,7 @@ impl StateStore {
                 stats_json,
                 record.state.to_string(),
                 if record.is_degraded { 1 } else { 0 },
+                record.triage_summary,
                 now,
             ],
         )?;
@@ -179,10 +187,17 @@ impl StateStore {
     pub fn update_state(&self, record_id: &str, state: RecordState) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = Utc::now().to_rfc3339();
-        conn.execute(
-            "UPDATE records SET state = ?1, updated_at = ?2 WHERE record_id = ?3",
-            params![state.to_string(), now, record_id],
-        )?;
+        if state == RecordState::Done || state == RecordState::Exported {
+            conn.execute(
+                "UPDATE records SET state = ?1, updated_at = ?2, lease_owner = NULL, lease_expires_at = NULL WHERE record_id = ?3",
+                params![state.to_string(), now, record_id],
+            )?;
+        } else {
+            conn.execute(
+                "UPDATE records SET state = ?1, updated_at = ?2 WHERE record_id = ?3",
+                params![state.to_string(), now, record_id],
+            )?;
+        }
         Ok(())
     }
 
@@ -271,5 +286,55 @@ impl StateStore {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn touch_heartbeat(&self, record_id: &str, lease_duration_secs: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now_ts = Utc::now().timestamp();
+        let lease_expires_ts = now_ts + lease_duration_secs;
+        let now_iso = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE records SET lease_expires_at = ?1, updated_at = ?2 WHERE record_id = ?3",
+            params![lease_expires_ts, now_iso, record_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_triage_result(
+        &self,
+        record_id: &str,
+        state: RecordState,
+        keywords_json: &str,
+        summary: &str,
+        clear_lease: bool,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = Utc::now().to_rfc3339();
+        if clear_lease {
+            conn.execute(
+                "UPDATE records 
+                 SET state = ?1, 
+                     triage_keywords_json = ?2, 
+                     triage_summary = ?3, 
+                     story = CASE WHEN (story IS NULL OR story = '') THEN ?3 ELSE story END, 
+                     updated_at = ?4, 
+                     lease_owner = NULL, 
+                     lease_expires_at = NULL 
+                 WHERE record_id = ?5",
+                params![state.to_string(), keywords_json, summary, now, record_id],
+            )?;
+        } else {
+            conn.execute(
+                "UPDATE records 
+                 SET state = ?1, 
+                     triage_keywords_json = ?2, 
+                     triage_summary = ?3, 
+                     story = CASE WHEN (story IS NULL OR story = '') THEN ?3 ELSE story END, 
+                     updated_at = ?4 
+                 WHERE record_id = ?5",
+                params![state.to_string(), keywords_json, summary, now, record_id],
+            )?;
+        }
+        Ok(())
     }
 }

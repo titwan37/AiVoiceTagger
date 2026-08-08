@@ -193,3 +193,77 @@ fn process_chunk(state: &mut WhisperState, config: &SttConfig, chunk: &AudioChun
 
     Ok(speech)
 }
+
+/// Run fast triage pass using ggml-tiny-q8_0.bin model.
+/// Transcribes audio snippets and checks for French watchlist keywords.
+pub fn run_triage_pass(
+    model_path: &Path,
+    snippets: &[Vec<f32>],
+    watchlist: &[String],
+) -> Result<(bool, Vec<String>, String)> {
+    if snippets.is_empty() {
+        return Ok((false, Vec::new(), String::new()));
+    }
+
+    let ctx = WhisperContext::new_with_params(
+        model_path.to_str().unwrap_or("models/ggml-tiny-q8_0.bin"),
+        WhisperContextParameters::default(),
+    )
+    .context("Failed to load lightweight Triage Whisper model (ggml-tiny-q8_0.bin)")?;
+
+    let mut state = ctx.create_state().context("Failed to create Triage Whisper state")?;
+    let mut snippet_parts = Vec::new();
+    let labels = ["Start", "Peak", "End"];
+
+    for (idx, snippet) in snippets.iter().enumerate() {
+        if snippet.is_empty() {
+            continue;
+        }
+
+        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        params.set_language(Some("fr"));
+        params.set_print_special(false);
+        params.set_print_progress(false);
+        params.set_print_realtime(false);
+        params.set_print_timestamps(false);
+
+        if state.full(params, snippet).is_ok() {
+            let n_seg = state.full_n_segments();
+            let mut seg_text = String::new();
+            for i in 0..n_seg {
+                if let Some(segment) = state.get_segment(i) {
+                    if let Ok(txt) = segment.to_str() {
+                        let cleaned = txt.trim();
+                        if !cleaned.is_empty() {
+                            seg_text.push_str(cleaned);
+                            seg_text.push(' ');
+                        }
+                    }
+                }
+            }
+            let trimmed = seg_text.trim();
+            if !trimmed.is_empty() {
+                let tag = if idx < labels.len() { labels[idx] } else { "Snippet" };
+                snippet_parts.push(format!("[{}] {}", tag, trimmed));
+            }
+        }
+    }
+
+    let raw_combined = snippet_parts.join(" ");
+    let mut summary = raw_combined.clone();
+    if summary.chars().count() > 300 {
+        summary = summary.chars().take(297).collect::<String>() + "...";
+    }
+
+    let lower_text = raw_combined.to_lowercase();
+    let mut matched = Vec::new();
+    for kw in watchlist {
+        let kw_lower = kw.to_lowercase();
+        if lower_text.contains(&kw_lower) {
+            matched.push(kw.clone());
+        }
+    }
+
+    let is_high_interest = !matched.is_empty();
+    Ok((is_high_interest, matched, summary))
+}

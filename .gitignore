@@ -7,6 +7,15 @@
 *.db-shm
 aivoicetagger_state.db
 
+#Dashboard
+/node_modules/
+/.angular/
+/cache/
+/.github/
+.gitignore
+.gitconfig
+
+
 # Large model files
 /models/*.bin
 /models/*.onnx

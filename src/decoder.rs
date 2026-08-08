@@ -29,6 +29,59 @@ impl AudioDecoder {
         Self { config }
     }
 
+    /// Fast snippet extractor for Triage Pass:
+    /// - If duration <= 90s, returns full PCM.
+    /// - If duration > 90s, extracts 3 x 30s snippets (Start 0-30s, End [duration-30s], and Peak RMS Speech Energy).
+    pub fn extract_triage_snippets(&self, file_path: &Path, file_size: u64) -> Result<Vec<Vec<f32>>> {
+        let probe = self.probe_and_decode(file_path, file_size, true)?;
+        let pcm = match probe.pcm_data {
+            Some(data) if !data.is_empty() => data,
+            _ => return Ok(Vec::new()),
+        };
+
+        let sample_rate = 16000;
+        let snippet_samples = 30 * sample_rate; // 30 seconds = 480,000 samples
+        let total_samples = pcm.len();
+
+        if total_samples <= 90 * sample_rate {
+            return Ok(vec![pcm]);
+        }
+
+        let mut snippets = Vec::with_capacity(3);
+
+        // 1. Start Snippet (0 - 30s)
+        let start_len = snippet_samples.min(total_samples);
+        snippets.push(pcm[0..start_len].to_vec());
+
+        // 2. End Snippet (last 30s)
+        let end_start = total_samples.saturating_sub(snippet_samples);
+        snippets.push(pcm[end_start..total_samples].to_vec());
+
+        // 3. Peak RMS Speech Snippet (scan 30s sliding windows)
+        let mut max_rms = 0.0f32;
+        let mut max_window_start = 0;
+        let step = 5 * sample_rate; // 5-second step
+
+        let mut pos = start_len;
+        while pos + snippet_samples <= end_start {
+            let window = &pcm[pos..pos + snippet_samples];
+            let sum_sq: f32 = window.iter().map(|&s| s * s).sum();
+            let rms = (sum_sq / window.len() as f32).sqrt();
+
+            if rms > max_rms {
+                max_rms = rms;
+                max_window_start = pos;
+            }
+            pos += step;
+        }
+
+        if max_rms > 0.005 && max_window_start != 0 {
+            snippets.push(pcm[max_window_start..max_window_start + snippet_samples].to_vec());
+        }
+
+        Ok(snippets)
+    }
+
     /// Probe audio metadata and optionally decode to 16 kHz mono PCM samples.
     pub fn probe_and_decode(&self, file_path: &Path, file_size: u64, decode_samples: bool) -> Result<AudioProbeResult> {
         let file = File::open(file_path)

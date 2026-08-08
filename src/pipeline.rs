@@ -20,10 +20,11 @@ pub struct Pipeline {
     decoder: AudioDecoder,
     exporter: Exporter,
     worker_id: String,
+    triage_only: bool,
 }
 
 impl Pipeline {
-    pub fn new(config: Config, worker_id: String) -> Result<Self> {
+    pub fn new(config: Config, worker_id: String, triage_only: bool) -> Result<Self> {
         let state_store = Arc::new(StateStore::new(&config.state_store)?);
         let scanner = FileScanner::new(config.scanner.clone())?;
         let decoder = AudioDecoder::new(config.decoder.clone());
@@ -36,6 +37,7 @@ impl Pipeline {
             decoder,
             exporter,
             worker_id,
+            triage_only,
         })
     }
 
@@ -99,6 +101,7 @@ impl Pipeline {
             // Spawn 30-second heartbeat monitor
             let worker_lbl = self.worker_id.clone();
             let record_lbl = record.record_id.clone();
+            let state_clone = self.state_store.clone();
             let (stop_heartbeat_tx, mut stop_heartbeat_rx) = tokio::sync::oneshot::channel::<()>();
 
             tokio::spawn(async move {
@@ -108,6 +111,7 @@ impl Pipeline {
                     tokio::select! {
                         _ = interval.tick() => {
                             info!("[Heartbeat] Worker {} is processing record {}...", worker_lbl, record_lbl);
+                            let _ = state_clone.touch_heartbeat(&record_lbl, 1800);
                         }
                         _ = &mut stop_heartbeat_rx => {
                             break;
@@ -117,6 +121,20 @@ impl Pipeline {
             });
 
             let path = Path::new(&record.directory).join(&record.name);
+            let lock_path = std::path::PathBuf::from(format!("{}.lock", path.to_string_lossy()));
+
+            let _lock_guard = match FileLockGuard::create(lock_path, &self.worker_id, 1800) {
+                Ok(Some(guard)) => guard,
+                Ok(None) => {
+                    info!("Record {} ({}) has active .lock file. Skipping.", record.record_id, record.name);
+                    let _ = stop_heartbeat_tx.send(());
+                    continue;
+                }
+                Err(e) => {
+                    warn!("Lockfile creation warning for record {}: {:?}. Continuing processing.", record.record_id, e);
+                    FileLockGuard::dummy()
+                }
+            };
 
             // Stage 2: Probe & decode audio
             let probe = match self.decoder.probe_and_decode(&path, record.length_bytes, self.config.stt.enabled) {
@@ -137,6 +155,43 @@ impl Pipeline {
             record.is_degraded = probe.is_degraded;
             record.state = RecordState::Decoded;
             self.state_store.insert_or_update_record(&record)?;
+
+            // Stage 2.5: High-Speed 3-Stage Triage Pass (ggml-tiny-q8_0.bin)
+            let watchlist = load_external_watchlist(&self.config.stt);
+            let triage_model = self.config.stt.triage_model_path.as_deref().unwrap_or("models/ggml-tiny-q8_0.bin");
+
+            if Path::new(triage_model).exists() {
+                if let Ok(snippets) = self.decoder.extract_triage_snippets(&path, record.length_bytes) {
+                    if !snippets.is_empty() {
+                        info!("[Triage Engine] Running ggml-tiny triage pass on {} audio snippets for record {}...", snippets.len(), record.record_id);
+                        if let Ok((is_high, matched_kw, triage_text)) = crate::stt::run_triage_pass(Path::new(triage_model), &snippets, &watchlist) {
+                            let kw_json = serde_json::to_string(&matched_kw).unwrap_or_default();
+                            record.triage_summary = Some(triage_text.clone());
+                            if record.story.is_empty() {
+                                record.story = triage_text.clone();
+                            }
+
+                            if is_high {
+                                info!("[Triage Engine] 🚨 Record {} flagged HIGH INTEREST (Matched: {:?})", record.record_id, matched_kw);
+                                record.state = RecordState::TriagedHighInterest;
+                                let _ = self.state_store.update_triage_result(&record.record_id, RecordState::TriagedHighInterest, &kw_json, &triage_text, self.triage_only);
+                                if self.triage_only {
+                                    let _ = stop_heartbeat_tx.send(());
+                                    processed_records.push(record);
+                                    continue;
+                                }
+                            } else {
+                                info!("[Triage Engine] 💤 Record {} marked LOW INTEREST (0 watchlist matches). Preview persisted.", record.record_id);
+                                record.state = RecordState::TriagedLowInterest;
+                                let _ = self.state_store.update_triage_result(&record.record_id, RecordState::TriagedLowInterest, &kw_json, &triage_text, true);
+                                let _ = stop_heartbeat_tx.send(());
+                                processed_records.push(record);
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
 
             // Stage 3: STT transcription (Pass 1 & optional Pass 2)
             if let (Some(pool), Some(pcm)) = (&primary_stt_pool, probe.pcm_data) {
@@ -258,4 +313,96 @@ fn run_sidecar_ipc(config: &Config, record: &RecordInfo) -> Result<RecordInfo> {
 
     let _ = child.wait();
     Ok(enriched)
+}
+
+pub struct FileLockGuard {
+    path: Option<std::path::PathBuf>,
+}
+
+impl FileLockGuard {
+    pub fn create(lock_path: std::path::PathBuf, worker_id: &str, stale_secs: u64) -> Result<Option<Self>> {
+        if lock_path.exists() {
+            if let Ok(metadata) = std::fs::metadata(&lock_path) {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(elapsed) = modified.elapsed() {
+                        if elapsed.as_secs() < stale_secs {
+                            tracing::info!(
+                                "Lockfile {:?} is active (age {}s < {}s). Skipping file.",
+                                lock_path, elapsed.as_secs(), stale_secs
+                            );
+                            return Ok(None);
+                        } else {
+                            tracing::warn!(
+                                "Lockfile {:?} is stale (age {}s >= {}s). Overwriting stale lock.",
+                                lock_path, elapsed.as_secs(), stale_secs
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        let content = format!(
+            "Worker: {} | Timestamp: {}\n",
+            worker_id,
+            chrono::Utc::now().to_rfc3339()
+        );
+        std::fs::write(&lock_path, content)
+            .with_context(|| format!("Failed to write lockfile {:?}", lock_path))?;
+
+        Ok(Some(Self {
+            path: Some(lock_path),
+        }))
+    }
+
+    pub fn dummy() -> Self {
+        Self { path: None }
+    }
+}
+
+impl Drop for FileLockGuard {
+    fn drop(&mut self) {
+        if let Some(ref lock_path) = self.path {
+            if lock_path.exists() {
+                let _ = std::fs::remove_file(lock_path);
+            }
+        }
+    }
+}
+
+fn load_external_watchlist(config: &crate::config::SttConfig) -> Vec<String> {
+    let mut keywords = Vec::new();
+
+    // 1. Try loading from external text file (e.g. watchlist.txt)
+    let file_path = config.watchlist_file.as_deref().unwrap_or("watchlist.txt");
+    if Path::new(file_path).exists() {
+        if let Ok(content) = std::fs::read_to_string(file_path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                    keywords.push(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    // 2. Fall back to config.yaml watchlist_keywords if file was empty or missing
+    if keywords.is_empty() {
+        if let Some(list) = &config.watchlist_keywords {
+            keywords.extend(list.clone());
+        }
+    }
+
+    // 3. Fall back to default inline list if still empty
+    if keywords.is_empty() {
+        keywords = vec![
+            "harcèlement".to_string(), "menace".to_string(), "insulte".to_string(), "dégage".to_string(),
+            "va chier".to_string(), "va te faire foutre".to_string(), "t'es nul".to_string(), "un gros nase".to_string(),
+            "cagibi".to_string(), "casser la gueule".to_string(), "ta gueule".to_string(), "mon frère".to_string(),
+            "avocat".to_string(), "police".to_string(), "tribunal".to_string(),
+            "argent".to_string(), "preuve".to_string(), "justice".to_string(), "chantage".to_string()
+        ];
+    }
+
+    keywords
 }

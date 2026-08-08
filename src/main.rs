@@ -48,6 +48,10 @@ struct Args {
     /// Scan directory and exit (dry run)
     #[arg(long, default_value_t = false)]
     scan_only: bool,
+
+    /// Run worker strictly in high-speed Triage Mode across all files
+    #[arg(long, default_value_t = false)]
+    triage_only: bool,
 }
 
 fn parse_cpu_affinity(affinity_str: &str) -> usize {
@@ -116,7 +120,9 @@ async fn main() -> Result<()> {
     }
 
     let worker_id = args.worker_id.unwrap_or_else(|| {
-        format!("worker_{}", std::process::id())
+        std::env::var("COMPUTERNAME")
+            .or_else(|_| std::env::var("HOSTNAME"))
+            .unwrap_or_else(|_| format!("worker_{}", std::process::id()))
     });
     info!("Running as worker instance: {}", worker_id);
 
@@ -150,7 +156,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    let pipeline = Pipeline::new(config, worker_id)?;
+    let pipeline = Pipeline::new(config, worker_id, args.triage_only)?;
     pipeline.run().await?;
 
     info!("AiVoiceTagger finished successfully.");

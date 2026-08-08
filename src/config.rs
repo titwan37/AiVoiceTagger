@@ -41,6 +41,9 @@ pub struct SttConfig {
     pub heavy_model_path: Option<String>,
     pub confidence_threshold: Option<f64>,
     pub intensity_threshold_rms: Option<f32>,
+    pub triage_model_path: Option<String>,
+    pub watchlist_file: Option<String>,
+    pub watchlist_keywords: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

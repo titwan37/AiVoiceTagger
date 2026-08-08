@@ -9,6 +9,8 @@ pub enum RecordState {
     Discovered,
     Queued,
     Decoded,
+    TriagedLowInterest,
+    TriagedHighInterest,
     Transcribed,
     NlpDone,
     Exported,
@@ -123,6 +125,8 @@ pub struct RecordInfo {
     pub quality_grade: QualityGrade,
     pub background_noise_detected: bool,
     pub avg_logprob: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub triage_summary: Option<String>,
 }
 
 impl RecordInfo {
@@ -153,6 +157,7 @@ impl RecordInfo {
             quality_grade: QualityGrade::Good,
             background_noise_detected: false,
             avg_logprob: 0.0,
+            triage_summary: None,
         }
     }
 
