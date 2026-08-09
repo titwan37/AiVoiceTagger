@@ -1,0 +1,48 @@
+.pipeline-bar {
+  display: flex;
+  height: 36px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+}
+
+.pipeline-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 2px;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: default;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  .seg-label {
+    font-family: 'Inter', sans-serif;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .seg-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    opacity: 0.85;
+  }
+}
+
+.stage-discovered { background: hsl(190, 60%, 42%); }
+.stage-queued     { background: hsl(210, 65%, 50%); }
+.stage-decoded    { background: hsl(230, 55%, 55%); }
+.stage-triaged-high { background: hsl(280, 65%, 55%); }
+.stage-triaged-low  { background: hsl(240, 50%, 45%); }
+.stage-transcribed { background: hsl(260, 55%, 55%); }
+.stage-nlp        { background: hsl(280, 50%, 52%); }
+.stage-exported   { background: hsl(300, 45%, 50%); }
+.stage-done       { background: hsl(152, 60%, 40%); }
+.stage-retry      { background: hsl(38, 80%, 50%); }
+.stage-failed     { background: hsl(0, 55%, 50%); }
+.stage-dead       { background: hsl(0, 30%, 35%); }

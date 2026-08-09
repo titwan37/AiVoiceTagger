@@ -30,7 +30,9 @@ pub struct DecoderConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SttConfig {
     pub enabled: bool,
+    pub provider: Option<String>, // "whisper", "parakeet", "auto"
     pub model_path: String,
+    pub parakeet_model_path: Option<String>,
     pub language: String,
     pub workers: usize,
     pub threads_per_worker: usize,
@@ -44,6 +46,7 @@ pub struct SttConfig {
     pub triage_model_path: Option<String>,
     pub watchlist_file: Option<String>,
     pub watchlist_keywords: Option<Vec<String>>,
+    pub diarization_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

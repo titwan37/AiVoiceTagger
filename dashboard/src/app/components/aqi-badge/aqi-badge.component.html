@@ -1,0 +1,9 @@
+<span [class]="cssClass">
+  <span class="aqi-icon">{{ icon }}</span>
+  @if (showLabel()) {
+    <span class="aqi-label">{{ label }}</span>
+  }
+  @if (count() !== null) {
+    <span class="aqi-count">{{ count() }}</span>
+  }
+</span>

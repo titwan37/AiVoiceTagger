@@ -1,0 +1,186 @@
+<div class="dashboard-container">
+  <!-- Global Banner -->
+  <app-global-banner />
+
+  <!-- Control & Action Toolbar -->
+  <section class="control-toolbar" style="display: flex; justify-content: space-between; align-items: center; background: #1e1e2d; border: 1px solid #2b2b40; border-radius: 10px; padding: 12px 18px; margin-top: 16px;">
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <button 
+        (click)="onTogglePause()" 
+        [disabled]="store.isPausing()"
+        [style.background]="store.isPaused() ? '#059669' : '#d97706'"
+        [style.opacity]="store.isPausing() ? '0.6' : '1'"
+        style="color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s ease;">
+        <span>{{ store.isPausing() ? '⏳ Requesting...' : (store.isPaused() ? '▶ Resume Ingestion' : '⏸ Pause Ingestion') }}</span>
+      </button>
+      <span style="font-size: 0.85rem; color: #9ca3af;">
+        Status: <strong [style.color]="store.isPaused() ? '#f59e0b' : '#10b981'">{{ store.isPaused() ? 'PAUSED' : 'RUNNING' }}</strong>
+      </span>
+      @if (store.lastCommandStatus()) {
+        <span class="command-status-badge" style="background: #312e81; color: #c7d2fe; padding: 4px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600;">
+          {{ store.lastCommandStatus() }}
+        </span>
+      }
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="tab-nav" style="display: flex; gap: 8px; background: #13131e; padding: 4px; border-radius: 8px;">
+      <button 
+        (click)="setTab('nodes')" 
+        [style.background]="activeTab() === 'nodes' ? '#2563eb' : 'transparent'"
+        [style.color]="activeTab() === 'nodes' ? 'white' : '#9ca3af'"
+        style="border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease;">
+        📡 Active Workers ({{ store.nodes().length }})
+      </button>
+      <button 
+        (click)="setTab('dead_letters')" 
+        [style.background]="activeTab() === 'dead_letters' ? '#dc2626' : 'transparent'"
+        [style.color]="activeTab() === 'dead_letters' ? 'white' : '#9ca3af'"
+        style="border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px;">
+        <span>💀 Dead Letters</span>
+        @if (store.deadLetters().length > 0) {
+          <span style="background: #7f1d1d; color: #fca5a5; padding: 2px 6px; border-radius: 10px; font-size: 0.75rem;">{{ store.deadLetters().length }}</span>
+        }
+      </button>
+      <button 
+        (click)="setTab('transcripts')" 
+        [style.background]="activeTab() === 'transcripts' ? '#2563eb' : 'transparent'"
+        [style.color]="activeTab() === 'transcripts' ? 'white' : '#9ca3af'"
+        style="border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease;">
+        📝 Live Feed ({{ store.transcripts().length }})
+      </button>
+      <button 
+        (click)="setTab('inventory')" 
+        [style.background]="activeTab() === 'inventory' ? '#6366f1' : 'transparent'"
+        [style.color]="activeTab() === 'inventory' ? 'white' : '#9ca3af'"
+        style="border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease;">
+        📦 Inventory Intelligence
+      </button>
+    </div>
+  </section>
+
+  <!-- Pipeline Funnel Bar -->
+  <section class="section-block" style="margin-top: 16px;">
+    <h2 class="section-title">Pipeline State Distribution</h2>
+    <app-pipeline-stage-bar [counts]="store.globalMetrics().pipeline_stage_counts" />
+  </section>
+
+  <!-- TAB 1: ACTIVE NODES GRID -->
+  @if (activeTab() === 'nodes') {
+    <!-- Filter Bar -->
+    <section class="filter-bar" style="margin-top: 16px;">
+      <div class="filter-group">
+        <label class="filter-label" for="search-input">🔍 Search</label>
+        <input
+          id="search-input"
+          type="text"
+          class="filter-input"
+          placeholder="Worker ID, file, model..."
+          [value]="store.searchFilter()"
+          (input)="onSearchChange($event)"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label" for="stage-select">📊 Stage</label>
+        <select id="stage-select" class="filter-select" [value]="store.stageFilter()" (change)="onStageChange($event)">
+          @for (s of stages; track s) {
+            <option [value]="s">{{ s }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label" for="aqi-select">🎯 AQI</label>
+        <select id="aqi-select" class="filter-select" [value]="store.aqiFilter()" (change)="onAqiChange($event)">
+          @for (a of aqiOptions; track a) {
+            <option [value]="a">{{ a }}</option>
+          }
+        </select>
+      </div>
+    </section>
+
+    <!-- Node Grid -->
+    <section class="node-grid">
+      @for (node of store.filteredNodes(); track node.worker_id) {
+        <app-node-status-card [node]="node" />
+      }
+
+      @if (store.filteredNodes().length === 0) {
+        <div class="empty-state">
+          <span class="empty-icon">📡</span>
+          <p>No worker nodes match current filters.</p>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- TAB 2: DEAD LETTER EXPLORER -->
+  @if (activeTab() === 'dead_letters') {
+    <section class="section-block" style="margin-top: 16px;">
+      <app-dead-letter-explorer 
+        [records]="store.deadLetters()" 
+        (retryRequested)="onRetryDeadLetter($event)">
+      </app-dead-letter-explorer>
+    </section>
+  }
+
+  <!-- TAB 3: LIVE TRANSCRIPTS & WATCHLIST FEED -->
+  @if (activeTab() === 'transcripts') {
+    <section class="section-block" style="margin-top: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h2 class="section-title" style="font-size: 1.1rem; font-weight: 700; color: #f3f4f6; margin: 0; display: flex; align-items: center; gap: 8px;">
+          <span>📝</span> Live Transcripts & Verbatim Watchlist Feed
+        </h2>
+        <input 
+          type="text" 
+          placeholder="Filter stories by keyword..." 
+          [value]="store.transcriptSearch()"
+          (input)="onTranscriptSearch($event)"
+          style="background: #13131e; border: 1px solid #2b2b40; color: #f3f4f6; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; width: 260px;"
+        />
+      </div>
+
+      <div class="transcripts-list" style="display: flex; flex-direction: column; gap: 12px;">
+        @for (t of store.filteredTranscripts(); track t.record_id) {
+          <div class="transcript-card" style="background: #1e1e2d; border: 1px solid #2b2b40; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-family: monospace; font-size: 0.9rem; font-weight: 600; color: #a78bfa;">{{ t.name }}</span>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                @if (t.state && (t.state.includes('TRIAGED') || t.state.includes('Triaged'))) {
+                  <span style="font-size: 0.75rem; background: #581c87; color: #e9d5ff; padding: 2px 8px; border-radius: 4px; font-weight: 600;">TRIAGED (PREVIEW)</span>
+                }
+                <span style="font-size: 0.75rem; background: #312e81; color: #c7d2fe; padding: 2px 8px; border-radius: 4px;">{{ t.speech_count }} speeches</span>
+                <span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;" [style.background]="t.is_degraded ? '#7f1d1d' : '#065f46'" [style.color]="t.is_degraded ? '#fca5a5' : '#a7f3d0'">
+                  {{ t.is_degraded ? 'DEGRADED' : 'GOOD' }}
+                </span>
+                <span style="font-size: 0.75rem; color: #9ca3af;">{{ t.updated_at | date:'HH:mm:ss' }}</span>
+              </div>
+            </div>
+            <p style="font-size: 0.85rem; color: #d1d5db; line-height: 1.4; margin: 0; background: #13131e; padding: 10px; border-radius: 6px;">
+              "{{ t.story }}"
+            </p>
+          </div>
+        }
+        @if (store.filteredTranscripts().length === 0) {
+          <div class="empty-state" style="background: #1e1e2d; padding: 20px; text-align: center; border-radius: 8px; color: #9ca3af;">
+            <p>No transcripts match current search query.</p>
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- TAB 4: INVENTORY INTELLIGENCE & PARTITION OVERVIEW -->
+  @if (activeTab() === 'inventory') {
+    <section class="section-block" style="margin-top: 16px;">
+      <app-inventory-overview />
+    </section>
+  }
+
+  <!-- Footer -->
+  <footer class="dashboard-footer" style="margin-top: 24px;">
+    <span>Last update: {{ store.lastUpdateTimestamp() | date:'HH:mm:ss' }}</span>
+    <span>AiVoiceTagger Supervisor v2.0 Command Center</span>
+  </footer>
+</div>

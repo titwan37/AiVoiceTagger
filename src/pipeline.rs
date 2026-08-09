@@ -201,10 +201,17 @@ impl Pipeline {
                 );
                 let chunks = vad.segment_audio(&record.record_id, &pcm);
 
+                let diarizer = crate::diarization::SpeakerDiarizer::new(
+                    self.config.stt.diarization_enabled.unwrap_or(true)
+                );
+
                 // Pass 1 (Primary model)
                 for chunk in &chunks {
                     if let Ok(rx) = pool.submit(chunk.clone()) {
-                        if let Ok(res) = rx.recv() {
+                        if let Ok(mut res) = rx.recv() {
+                            if let Ok(diarized) = diarizer.diarize_chunk(&chunk.samples, chunk.start_ms, chunk.end_ms - chunk.start_ms) {
+                                diarizer.assign_speaker_to_speech(&mut res.speech, &diarized);
+                            }
                             record.speeches.push(res.speech);
                         }
                     }
@@ -229,7 +236,10 @@ impl Pipeline {
                     record.speeches.clear();
                     for chunk in &chunks {
                         if let Ok(rx) = heavy_pool.submit(chunk.clone()) {
-                            if let Ok(res) = rx.recv() {
+                            if let Ok(mut res) = rx.recv() {
+                                if let Ok(diarized) = diarizer.diarize_chunk(&chunk.samples, chunk.start_ms, chunk.end_ms - chunk.start_ms) {
+                                    diarizer.assign_speaker_to_speech(&mut res.speech, &diarized);
+                                }
                                 record.speeches.push(res.speech);
                             }
                         }

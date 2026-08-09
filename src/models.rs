@@ -45,6 +45,8 @@ pub struct SpeechContent {
     pub offset_ms: u64,
     pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub words: Option<Vec<WordTiming>>,
 }
 
@@ -66,6 +68,7 @@ impl SpeechContent {
             word_count,
             offset_ms,
             duration_ms,
+            speaker_id: None,
             words: None,
         }
     }

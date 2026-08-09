@@ -9,6 +9,7 @@ mod state;
 mod legacy_import;
 mod stt;
 mod vad;
+mod diarization;
 
 use crate::config::Config;
 use crate::pipeline::Pipeline;

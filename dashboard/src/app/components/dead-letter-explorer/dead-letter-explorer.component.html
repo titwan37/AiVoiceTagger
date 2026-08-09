@@ -1,0 +1,59 @@
+<div class="dead-letter-panel">
+  <div class="panel-header">
+    <div class="title-group">
+      <span class="skull-icon">💀</span>
+      <h3>Dead Letter Explorer & Failed Record Recovery</h3>
+    </div>
+    <span class="count-badge">{{ records.length }} Failed Records</span>
+  </div>
+
+  @if (records.length === 0) {
+    <div class="empty-state">
+      <span class="empty-icon">✅</span>
+      <p>Zero dead-letter failures! All records are processing cleanly.</p>
+    </div>
+  } @else {
+    <div class="table-container">
+      <table class="dead-letter-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Record ID</th>
+            <th>Stage</th>
+            <th>Error Overview</th>
+            <th>Timestamp</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of records; track item.id) {
+            <tr class="record-row" [class.expanded]="expandedId() === item.id" (click)="toggleExpand(item.id)">
+              <td class="col-id">#{{ item.id }}</td>
+              <td class="col-record-id"><code>{{ item.record_id }}</code></td>
+              <td>
+                <span class="stage-tag">{{ item.stage }}</span>
+              </td>
+              <td class="col-error">{{ item.error }}</td>
+              <td class="col-date">{{ item.created_at | date:'shortTime' }}</td>
+              <td class="col-actions">
+                <button class="btn-retry" (click)="onRetry(item.record_id, $event)">
+                  <span>🔄</span> Retry
+                </button>
+              </td>
+            </tr>
+            @if (expandedId() === item.id) {
+              <tr class="details-row">
+                <td colspan="6">
+                  <div class="details-content">
+                    <h4>Detailed Context & Stack Trace:</h4>
+                    <pre><code>{{ item.context_json || item.error }}</code></pre>
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

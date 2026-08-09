@@ -1,0 +1,40 @@
+.aqi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s ease;
+
+  .aqi-icon {
+    font-size: 0.8rem;
+  }
+
+  .aqi-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    margin-left: 2px;
+  }
+}
+
+.aqi-good {
+  background: hsla(152, 70%, 40%, 0.15);
+  color: hsl(152, 70%, 50%);
+  border: 1px solid hsla(152, 70%, 40%, 0.3);
+}
+
+.aqi-degraded {
+  background: hsla(38, 90%, 50%, 0.15);
+  color: hsl(38, 90%, 55%);
+  border: 1px solid hsla(38, 90%, 50%, 0.3);
+}
+
+.aqi-unusable {
+  background: hsla(0, 65%, 45%, 0.15);
+  color: hsl(0, 65%, 55%);
+  border: 1px solid hsla(0, 65%, 45%, 0.3);
+}

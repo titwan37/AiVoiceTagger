@@ -1,0 +1,37 @@
+{
+  "name": "aivoicetagger-dashboard",
+  "version": "1.0.0",
+  "description": "AiVoiceTagger Real-Time Supervisor Dashboard",
+  "overrides": {
+    "@hono/node-server": "^2.0.5",
+    "postcss": "^8.5.23",
+    "undici": "^7.28.1",
+    "uuid": "^11.1.1",
+    "webpack-dev-server": "^5.2.6"
+  },
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve --open",
+    "build": "ng build",
+    "dev": "ng serve --open"
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/animations": "^21.2.19",
+    "@angular/common": "^21.2.19",
+    "@angular/compiler": "^21.2.19",
+    "@angular/core": "^21.2.19",
+    "@angular/forms": "^21.2.19",
+    "@angular/platform-browser": "^21.2.19",
+    "@angular/platform-browser-dynamic": "^21.2.19",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.6.0",
+    "zone.js": "~0.15.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^21.2.19",
+    "@angular/cli": "^21.2.19",
+    "@angular/compiler-cli": "^21.2.19",
+    "typescript": "~5.9.0"
+  }
+}

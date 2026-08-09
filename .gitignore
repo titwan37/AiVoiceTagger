@@ -8,13 +8,19 @@
 aivoicetagger_state.db
 
 #Dashboard
-/node_modules/
-/.angular/
-/cache/
-/.github/
+/dashboard/.angular/.cache/
+/dashboard/.angular*
+/dashboard/node_modules/
+/node_modules/*
+/.angular/*
+/cache/*
+/.github/*
 .gitignore
 .gitconfig
 
+# Export
+/export/*
+/models/*
 
 # Large model files
 /models/*.bin
@@ -46,3 +52,4 @@ ENV/
 .vscode/
 .DS_Store
 Thumbs.db
+dashboard/.angular/cache/21.2.19/aivoicetagger-dashboard/vite/deps/_metadata.json

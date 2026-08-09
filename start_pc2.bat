@@ -1,0 +1,1 @@
+cargo run --release -- --config config.yaml --from-csv inventory_pc2.csv --worker-id pc-beta

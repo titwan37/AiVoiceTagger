@@ -1,0 +1,157 @@
+.dead-letter-panel {
+  background: #181825;
+  border: 1px solid #2b2b40;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skull-icon {
+  font-size: 1.4rem;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f3f4f6;
+}
+
+.count-badge {
+  background: #7f1d1d;
+  color: #fca5a5;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  background: #13131e;
+  border-radius: 8px;
+  color: #9ca3af;
+}
+
+.empty-icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.dead-letter-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.dead-letter-table th {
+  background: #1e1e2d;
+  color: #9ca3af;
+  padding: 10px 14px;
+  font-weight: 600;
+  border-bottom: 1px solid #2b2b40;
+}
+
+.record-row {
+  border-bottom: 1px solid #232334;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.record-row:hover {
+  background: #232338;
+}
+
+.record-row td {
+  padding: 12px 14px;
+  color: #d1d5db;
+}
+
+.col-id {
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.col-record-id code {
+  color: #a78bfa;
+  font-family: monospace;
+}
+
+.stage-tag {
+  background: #374151;
+  color: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.col-error {
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #ef4444;
+}
+
+.btn-retry {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.2s ease;
+}
+
+.btn-retry:hover {
+  background: #1d4ed8;
+}
+
+.details-row td {
+  background: #11111b;
+  padding: 16px;
+}
+
+.details-content h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.details-content pre {
+  margin: 0;
+  background: #09090e;
+  padding: 12px;
+  border-radius: 6px;
+  color: #fca5a5;
+  font-family: monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

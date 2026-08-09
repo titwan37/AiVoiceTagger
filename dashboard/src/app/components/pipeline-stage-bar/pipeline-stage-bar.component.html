@@ -1,0 +1,13 @@
+<div class="pipeline-bar">
+  @for (seg of segments; track seg.label) {
+    <div
+      class="pipeline-segment {{ seg.cssClass }}"
+      [style.width.%]="seg.percent"
+      [title]="seg.label + ': ' + seg.count">
+      @if (seg.percent > 6) {
+        <span class="seg-label">{{ seg.label }}</span>
+        <span class="seg-count">{{ seg.count }}</span>
+      }
+    </div>
+  }
+</div>

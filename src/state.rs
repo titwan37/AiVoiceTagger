@@ -232,11 +232,9 @@ impl StateStore {
         let claimed_row: Option<(String, String, String, Option<String>, String, u64)> = tx.query_row(
             "SELECT record_id, name, directory, date_record_day, date_last_write, length_bytes
              FROM records
-             WHERE (state = ?1 OR state = ?2) AND (lease_expires_at IS NULL OR lease_expires_at < ?3)
+             WHERE (UPPER(state) = 'DISCOVERED' OR UPPER(state) = 'QUEUED') AND (lease_expires_at IS NULL OR lease_expires_at < ?1)
              LIMIT 1",
             params![
-                RecordState::Discovered.to_string(),
-                RecordState::Queued.to_string(),
                 now_ts
             ],
             |row| {

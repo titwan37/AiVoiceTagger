@@ -1,0 +1,1 @@
+python -c "import sqlite3; c=sqlite3.connect('aivoicetagger_state.db'); c.execute(""UPDATE records SET state='Discovered', lease_owner=NULL, lease_expires_at=NULL WHERE UPPER(state) IN ('DEADLETTER','DEAD_LETTER','FAILED','DISCOVERED')""); c.commit(); print('Reset successfully updated records to Discovered state!')"

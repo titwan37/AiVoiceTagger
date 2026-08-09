@@ -1,0 +1,38 @@
+# AiVoiceTagger French Watchlist Keywords
+# Lines starting with # are comments. Empty lines are ignored.
+
+# Legal & Judicial
+harcèlement
+menace
+insulte
+avocat
+police
+tribunal
+argent
+preuve
+justice
+chantage
+
+# Priority Terms
+dégage
+attaque
+va chier
+va te faire foutre
+un gros nase
+ta gueule
+t'es nul
+t'es un gros nul
+t'es moche
+t'es vilain
+sale 
+blanc bec
+cagibi
+casser la gueule
+mon frère
+pas fini avec toi
+tu va voir
+je vais te faire
+je vais te defoncer
+tu vas voir ta gueule
+tu vas mourir
+crève

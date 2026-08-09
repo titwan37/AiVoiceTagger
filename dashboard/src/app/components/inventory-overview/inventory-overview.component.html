@@ -1,0 +1,280 @@
+<div class="inventory-overview-container">
+  <!-- Section 1: Summary Metric Cards & Partition Health -->
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <span class="card-label">Master Manifest</span>
+      <span class="card-value">{{ store.balance().master_count | number }}</span>
+      <span class="card-sub">{{ store.balance().total_size_gb }} GB Total Audio</span>
+    </div>
+
+    <div class="metric-card pc1-card">
+      <span class="card-label">Worker PC1 Allocation</span>
+      <span class="card-value">{{ store.balance().pc1_count | number }}</span>
+      <span class="card-sub">{{ store.balance().pc1_percent }}% of workload</span>
+    </div>
+
+    <div class="metric-card pc2-card">
+      <span class="card-label">Worker PC2 Allocation</span>
+      <span class="card-value">{{ store.balance().pc2_count | number }}</span>
+      <span class="card-sub">{{ store.balance().pc2_percent }}% of workload</span>
+    </div>
+
+    <div class="metric-card" [class.alert-card]="store.balance().overlap_count > 0">
+      <span class="card-label">Duplicate Overlaps</span>
+      <span class="card-value">{{ store.balance().overlap_count }}</span>
+      <span class="card-sub">{{ store.balance().overlap_count > 0 ? '⚠️ Duplicate Risk' : '✅ 0 Overlaps' }}</span>
+    </div>
+
+    <div class="metric-card" [class.alert-card]="store.balance().orphan_count > 0">
+      <span class="card-label">Unassigned Orphans</span>
+      <span class="card-value">{{ store.balance().orphan_count }}</span>
+      <span class="card-sub">{{ store.balance().orphan_count > 0 ? '⚠️ Data Loss Risk' : '✅ 100% Coverage' }}</span>
+    </div>
+  </div>
+
+  <!-- Partition Balance Gauge -->
+  <div class="balance-gauge-panel">
+    <div class="gauge-header">
+      <h4>Partition Strategy Workload Split (PC1 vs PC2)</h4>
+      <span>PC1: {{ store.balance().pc1_percent }}% | PC2: {{ store.balance().pc2_percent }}%</span>
+    </div>
+    <div class="gauge-bar-container">
+      <div class="gauge-pc1" [style.width.%]="store.balance().pc1_percent"></div>
+      <div class="gauge-pc2" [style.width.%]="store.balance().pc2_percent"></div>
+    </div>
+  </div>
+
+  <!-- Partition Triage Status & Remaining Queue Panel -->
+  <div class="triage-status-panel" style="background: #1e1e2d; border: 1px solid #2b2b40; border-radius: 10px; padding: 16px; margin-top: 16px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <h3 style="margin: 0; font-size: 1rem; color: #f3f4f6; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+        <span>🎯</span> Partition Triage Progress & Remaining Queue Status
+      </h3>
+      <span style="font-size: 0.8rem; color: #9ca3af; background: #13131e; padding: 4px 10px; border-radius: 6px; border: 1px solid #2b2b40;">
+        Live SQLite Database Sync
+      </span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+      <!-- PC1 Partition Card -->
+      @if (store.partitionTriage()['pc1']; as pc1) {
+        <div class="partition-card" style="background: #13131e; border: 1px solid #2b2b40; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 700; color: #60a5fa; font-size: 0.95rem;">💻 Worker PC1 (`inventory_pc1.csv`)</span>
+            <span style="font-size: 0.75rem; background: #1e3a8a; color: #93c5fd; padding: 2px 8px; border-radius: 4px; font-weight: 600;">
+              {{ pc1.total | number }} Total Records
+            </span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem;">
+            <div style="background: #1e1e2d; padding: 8px; border-radius: 6px;">
+              <span style="color: #9ca3af; display: block; font-size: 0.75rem;">Triaged / Processed</span>
+              <strong style="color: #10b981; font-size: 1rem;">{{ pc1.processed_total | number }}</strong>
+              <span style="color: #6ee7b7; font-size: 0.75rem; margin-left: 4px;">({{ pc1.processed_pct }}%)</span>
+            </div>
+            <div style="background: #1e1e2d; padding: 8px; border-radius: 6px;">
+              <span style="color: #9ca3af; display: block; font-size: 0.75rem;">Remaining to Triage</span>
+              <strong style="color: #f59e0b; font-size: 1rem;">{{ pc1.remaining | number }}</strong>
+              <span style="color: #fcd34d; font-size: 0.75rem; margin-left: 4px;">({{ pc1.remaining_pct }}%)</span>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #9ca3af;">
+            <span>🚨 High Interest: <strong style="color: #e9d5ff;">{{ pc1.triaged_high }}</strong></span>
+            <span>💤 Low Interest: <strong style="color: #93c5fd;">{{ pc1.triaged_low }}</strong></span>
+            <span>✓ Fully Done: <strong style="color: #a7f3d0;">{{ pc1.done }}</strong></span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div style="height: 8px; background: #2b2b40; border-radius: 4px; overflow: hidden; display: flex;">
+            <div [style.width.%]="pc1.processed_pct" style="background: #10b981; transition: width 0.4s ease;" title="Processed: {{ pc1.processed_pct }}%"></div>
+            <div [style.width.%]="pc1.remaining_pct" style="background: #f59e0b; transition: width 0.4s ease;" title="Remaining: {{ pc1.remaining_pct }}%"></div>
+          </div>
+        </div>
+      }
+
+      <!-- PC2 Partition Card -->
+      @if (store.partitionTriage()['pc2']; as pc2) {
+        <div class="partition-card" style="background: #13131e; border: 1px solid #2b2b40; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 700; color: #a78bfa; font-size: 0.95rem;">💻 Worker PC2 (`inventory_pc2.csv`)</span>
+            <span style="font-size: 0.75rem; background: #4c1d95; color: #ddd6fe; padding: 2px 8px; border-radius: 4px; font-weight: 600;">
+              {{ pc2.total | number }} Total Records
+            </span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem;">
+            <div style="background: #1e1e2d; padding: 8px; border-radius: 6px;">
+              <span style="color: #9ca3af; display: block; font-size: 0.75rem;">Triaged / Processed</span>
+              <strong style="color: #10b981; font-size: 1rem;">{{ pc2.processed_total | number }}</strong>
+              <span style="color: #6ee7b7; font-size: 0.75rem; margin-left: 4px;">({{ pc2.processed_pct }}%)</span>
+            </div>
+            <div style="background: #1e1e2d; padding: 8px; border-radius: 6px;">
+              <span style="color: #9ca3af; display: block; font-size: 0.75rem;">Remaining to Triage</span>
+              <strong style="color: #f59e0b; font-size: 1rem;">{{ pc2.remaining | number }}</strong>
+              <span style="color: #fcd34d; font-size: 0.75rem; margin-left: 4px;">({{ pc2.remaining_pct }}%)</span>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #9ca3af;">
+            <span>🚨 High Interest: <strong style="color: #e9d5ff;">{{ pc2.triaged_high }}</strong></span>
+            <span>💤 Low Interest: <strong style="color: #93c5fd;">{{ pc2.triaged_low }}</strong></span>
+            <span>✓ Fully Done: <strong style="color: #a7f3d0;">{{ pc2.done }}</strong></span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div style="height: 8px; background: #2b2b40; border-radius: 4px; overflow: hidden; display: flex;">
+            <div [style.width.%]="pc2.processed_pct" style="background: #10b981; transition: width 0.4s ease;" title="Processed: {{ pc2.processed_pct }}%"></div>
+            <div [style.width.%]="pc2.remaining_pct" style="background: #f59e0b; transition: width 0.4s ease;" title="Remaining: {{ pc2.remaining_pct }}%"></div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Section 2: Complexity Breakdown Grid -->
+  <div class="complexity-grid">
+    <!-- Codec Breakdown -->
+    <div class="panel-card">
+      <div class="panel-header">
+        <span class="icon">🎵</span>
+        <h4>Codec & Format Distribution</h4>
+      </div>
+      <div class="codec-list">
+        @for (c of store.codecStats(); track c.codec) {
+          <div class="codec-item">
+            <div class="codec-info">
+              <span class="codec-name">{{ c.codec }}</span>
+              <span class="codec-count">{{ c.count | number }} files ({{ c.size_gb }} GB)</span>
+            </div>
+            <div class="bar-bg">
+              <div class="bar-fill" [style.width.%]="(c.count / (store.balance().master_count || 1)) * 100"></div>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Naming Patterns -->
+    <div class="panel-card">
+      <div class="panel-header">
+        <span class="icon">🏷️</span>
+        <h4>Naming Convention Complexity</h4>
+      </div>
+      <div class="naming-grid">
+        <div class="naming-box">
+          <span class="box-title">Structured (YYYY_MM_DD)</span>
+          <span class="box-val">{{ store.namingPatterns()['Structured'] || 0 | number }}</span>
+        </div>
+        <div class="naming-box">
+          <span class="box-title">Semi-Structured</span>
+          <span class="box-val">{{ store.namingPatterns()['Semi-Structured'] || 0 | number }}</span>
+        </div>
+        <div class="naming-box">
+          <span class="box-title">Unstructured</span>
+          <span class="box-val">{{ store.namingPatterns()['Unstructured'] || 0 | number }}</span>
+        </div>
+        <div class="naming-box">
+          <span class="box-title">Video Files (.mp4)</span>
+          <span class="box-val">{{ store.namingPatterns()['Video'] || 0 | number }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Source Folders -->
+    <div class="panel-card full-width">
+      <div class="panel-header">
+        <span class="icon">📁</span>
+        <h4>Top 10 Source Folders Heatmap</h4>
+      </div>
+      <div class="folder-table-container">
+        <table class="folder-table">
+          <thead>
+            <tr>
+              <th>Source Directory Path</th>
+              <th>File Count</th>
+              <th>Total Size (GB)</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (f of store.topFolders(); track f.directory) {
+              <tr>
+                <td class="folder-path"><code>{{ f.directory }}</code></td>
+                <td>{{ f.count | number }}</td>
+                <td>{{ f.size_gb }} GB</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Searchable Master Manifest Table -->
+  <div class="manifest-section">
+    <div class="manifest-header">
+      <div class="header-title">
+        <span class="icon">📋</span>
+        <h3>Master Manifest Partition Inspector</h3>
+      </div>
+
+      <!-- Filters -->
+      <div class="manifest-filters">
+        <input 
+          type="text" 
+          placeholder="Search by file or directory..."
+          [value]="store.searchQuery()"
+          (input)="onSearch($event)"
+          class="filter-input"
+        />
+
+        <select class="filter-select" [value]="store.assignmentFilter()" (change)="onAssignmentChange($event)">
+          <option value="ALL">All Assignments</option>
+          <option value="PC1">Worker PC1 Only</option>
+          <option value="PC2">Worker PC2 Only</option>
+          <option value="BOTH">Duplicates (BOTH)</option>
+          <option value="NONE">Orphans (UNASSIGNED)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Records Table -->
+    <div class="table-container">
+      <table class="manifest-table">
+        <thead>
+          <tr>
+            <th>Record ID</th>
+            <th>Filename</th>
+            <th>Source Folder</th>
+            <th>Codec</th>
+            <th>Size (MB)</th>
+            <th>Worker Assignment</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of store.filteredRecords(); track r.record_id) {
+            <tr>
+              <td class="col-id"><code>{{ r.record_id }}</code></td>
+              <td class="col-name">{{ r.name }}</td>
+              <td class="col-dir"><code>{{ r.directory }}</code></td>
+              <td><span class="codec-tag">{{ r.codec }}</span></td>
+              <td>{{ (r.length_bytes / 1048576) | number:'1.1-1' }} MB</td>
+              <td>
+                <span class="badge" [ngClass]="getAssignmentBadgeClass(r.assigned_to)">
+                  {{ r.assigned_to }}
+                </span>
+              </td>
+            </tr>
+          }
+          @if (store.filteredRecords().length === 0) {
+            <tr>
+              <td colspan="6" class="empty-cell">
+                No inventory items match current filters.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

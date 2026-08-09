@@ -1,0 +1,1 @@
+python -c "import sqlite3, os; db=os.path.join(os.path.dirname(__file__), '..', 'aivoicetagger_state.db'); conn=sqlite3.connect(db); print(conn.execute('SELECT state, COUNT(*) FROM records GROUP BY state').fetchall()); conn.close()"

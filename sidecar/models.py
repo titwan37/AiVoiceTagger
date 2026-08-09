@@ -17,6 +17,7 @@ class SpeechContent(BaseModel):
     word_count: int
     offset_ms: int
     duration_ms: int
+    speaker_id: Optional[str] = None
     words: Optional[List[WordTiming]] = None
 
 
@@ -49,3 +50,8 @@ class RecordInfo(BaseModel):
     stats_verbatim: StatsVerbatim = Field(default_factory=StatsVerbatim)
     state: str = "DISCOVERED"
     is_degraded: bool = False
+    quality_grade: str = "GOOD"
+    background_noise_detected: bool = False
+    avg_logprob: float = 0.0
+    triage_summary: Optional[str] = None
+

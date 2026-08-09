@@ -8,6 +8,40 @@ use std::thread;
 use tracing::{error, info};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState, WhisperTokenId};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SttEngineProvider {
+    Whisper,
+    Parakeet,
+    Auto,
+}
+
+impl SttEngineProvider {
+    pub fn parse(s: Option<&str>) -> Self {
+        match s.unwrap_or("auto").to_lowercase().as_str() {
+            "parakeet" => Self::Parakeet,
+            "whisper" => Self::Whisper,
+            _ => Self::Auto,
+        }
+    }
+}
+
+pub trait TranscriptionProvider: Send + Sync {
+    fn name(&self) -> &'static str;
+    fn process_chunk(&self, state: &mut WhisperState, config: &SttConfig, chunk: &AudioChunk, token_eot: WhisperTokenId) -> Result<SpeechContent>;
+}
+
+pub struct WhisperProvider;
+
+impl TranscriptionProvider for WhisperProvider {
+    fn name(&self) -> &'static str {
+        "Whisper (ggml)"
+    }
+
+    fn process_chunk(&self, state: &mut WhisperState, config: &SttConfig, chunk: &AudioChunk, token_eot: WhisperTokenId) -> Result<SpeechContent> {
+        process_chunk(state, config, chunk, token_eot)
+    }
+}
+
 pub struct SttRequest {
     pub chunk: AudioChunk,
     pub response_tx: mpsc::Sender<SttResult>,
@@ -25,6 +59,7 @@ pub struct WhisperPool {
 
 impl WhisperPool {
     pub fn new(config: SttConfig, model_override: Option<&str>) -> Result<Self> {
+        let provider_type = SttEngineProvider::parse(config.provider.as_deref());
         let model_path_str = model_override.unwrap_or(&config.model_path).to_string();
         let (request_tx, request_rx) = mpsc::channel::<SttRequest>();
         let request_rx = std::sync::Arc::new(std::sync::Mutex::new(request_rx));
@@ -34,7 +69,7 @@ impl WhisperPool {
             anyhow::bail!("STT model path does not exist: {:?}", model_path);
         }
 
-        info!("Loading shared WhisperContext once for STT pool: {}", model_path_str);
+        info!("Initializing STT pool [Engine Provider: {:?}] loading shared context from: {}", provider_type, model_path_str);
         let ctx = Arc::new(
             WhisperContext::new_with_params(&model_path_str, WhisperContextParameters::default())
                 .with_context(|| format!("Failed to load Whisper context from {}", model_path_str))?,

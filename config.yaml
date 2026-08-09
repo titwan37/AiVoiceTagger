@@ -20,7 +20,10 @@ decoder:
 
 stt:
   enabled: true
+  provider: "parakeet" # options: "parakeet", "whisper", "auto"
   model_path: "models/ggml-small-q8_0.bin"
+  parakeet_model_path: "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/model.int8.onnx"
+  diarization_enabled: true
   language: "fr"
   workers: 4
   threads_per_worker: 3

@@ -1,0 +1,84 @@
+<article class="node-card" [class]="healthClass">
+  <!-- Header -->
+  <div class="card-header">
+    <div class="node-identity">
+      <span class="health-dot"></span>
+      <span class="worker-id">{{ node().worker_id }}</span>
+    </div>
+    <span class="cpu-affinity">Cores {{ node().cpu_affinity }}</span>
+  </div>
+
+  <!-- Active File & Stage -->
+  <div class="active-work">
+    <div class="file-name" [title]="node().active_file">📄 {{ node().active_file }}</div>
+    <div class="stage-row">
+      <span class="stage-badge">{{ stageLabel }}</span>
+      <app-aqi-badge [grade]="node().current_aqi" [showLabel]="false" />
+    </div>
+  </div>
+
+  <!-- Mission & Intended Goal Context -->
+  <div class="mission-block" style="background: #13131e; border: 1px solid #2b2b40; border-radius: 6px; padding: 8px 10px; margin: 8px 0; font-size: 0.78rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+      <span style="font-weight: 700; color: #a78bfa; font-size: 0.8rem;">
+        {{ node().processing_goal || '🎙️ Pipeline Processing' }}
+      </span>
+      <span style="font-size: 0.7rem; color: #9ca3af; background: #1e1e2d; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
+        Goal: {{ node().expected_output || 'State update' }}
+      </span>
+    </div>
+    <p style="margin: 0; color: #d1d5db; line-height: 1.35; font-size: 0.76rem;">
+      {{ node().goal_description || 'Processing audio file through active state machine.' }}
+    </p>
+  </div>
+
+  <!-- Chunk Progress -->
+  <div class="progress-section">
+    <div class="progress-header">
+      <span class="progress-label">Chunk Progress</span>
+      <span class="progress-value">{{ node().chunk_progress_percent }}%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" [style.width.%]="node().chunk_progress_percent"></div>
+    </div>
+  </div>
+
+  <!-- Model & Sidecar -->
+  <div class="info-row">
+    <div class="info-item">
+      <span class="info-label">Model</span>
+      <span class="info-value mono">{{ modelShort }}</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Sidecar</span>
+      <span class="info-value" [class]="sidecarClass">{{ node().sidecar_status }}</span>
+    </div>
+  </div>
+
+  <!-- Resources -->
+  <div class="resources-row">
+    <div class="resource">
+      <span class="res-label">CPU</span>
+      <div class="res-bar-track">
+        <div class="res-bar-fill cpu-fill" [style.width.%]="node().resources.cpu_percent"
+             [class.high]="node().resources.cpu_percent > 80"></div>
+      </div>
+      <span class="res-value">{{ node().resources.cpu_percent }}%</span>
+    </div>
+    <div class="resource">
+      <span class="res-label">RAM</span>
+      <div class="res-bar-track">
+        <div class="res-bar-fill ram-fill" [style.width.%]="(node().resources.rss_memory_mb / 1200) * 100"
+             [class.high]="node().resources.rss_memory_mb > 900"></div>
+      </div>
+      <span class="res-value">{{ node().resources.rss_memory_mb }}MB</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="card-footer">
+    <span class="footer-item">🕐 {{ heartbeatAge }}</span>
+    <span class="footer-item">⏳ {{ leaseRemaining }}</span>
+    <span class="footer-item mono">{{ node().records_processed }} done</span>
+  </div>
+</article>

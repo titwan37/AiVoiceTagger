@@ -1,0 +1,128 @@
+<section class="global-banner">
+  <div class="banner-header">
+    <div class="banner-title">
+      <span class="title-icon">🎙️</span>
+      <h1>AiVoiceTagger Supervisor</h1>
+    </div>
+    <div class="banner-actions" style="display: flex; gap: 12px; align-items: center;">
+      <!-- Time Window Selector -->
+      <div class="time-window-nav" style="display: flex; align-items: center; gap: 6px; background: #13131e; padding: 4px 8px; border: 1px solid #2b2b40; border-radius: 6px;">
+        <span style="font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; margin-right: 4px;">Window:</span>
+        <button 
+          (click)="store.setTimeWindowFilter('1h')"
+          [style.background]="store.timeWindowFilter() === '1h' ? '#2563eb' : 'transparent'"
+          [style.color]="store.timeWindowFilter() === '1h' ? 'white' : '#9ca3af'"
+          style="border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
+          ⚡ 1h
+        </button>
+        <button 
+          (click)="store.setTimeWindowFilter('4h')"
+          [style.background]="store.timeWindowFilter() === '4h' ? '#2563eb' : 'transparent'"
+          [style.color]="store.timeWindowFilter() === '4h' ? 'white' : '#9ca3af'"
+          style="border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
+          🕒 4h
+        </button>
+        <button 
+          (click)="store.setTimeWindowFilter('12h')"
+          [style.background]="store.timeWindowFilter() === '12h' ? '#2563eb' : 'transparent'"
+          [style.color]="store.timeWindowFilter() === '12h' ? 'white' : '#9ca3af'"
+          style="border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
+          🌙 12h
+        </button>
+        <button 
+          (click)="store.setTimeWindowFilter('all')"
+          [style.background]="store.timeWindowFilter() === 'all' ? '#2563eb' : 'transparent'"
+          [style.color]="store.timeWindowFilter() === 'all' ? 'white' : '#9ca3af'"
+          style="border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
+          🌐 All
+        </button>
+      </div>
+
+      <a href="http://localhost:9090/api/export/csv" target="_blank" class="export-btn" style="background: #2563eb; color: white; padding: 6px 14px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s ease;">
+        <span>📥</span> Export Live CSV
+      </a>
+      <button (click)="generateMarkdownReport()" class="export-btn" style="background: #4f46e5; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: background 0.2s ease;">
+        <span>📄</span> Generate MD Report
+      </button>
+      <div class="connection-indicator" [class.connected]="store.connectionStatus() === 'CONNECTED'"
+           [class.reconnecting]="store.connectionStatus() === 'RECONNECTING'">
+        <span class="dot"></span>
+        <span class="conn-label">{{ store.connectionStatus() }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="metrics-grid">
+    <!-- Total Files -->
+    <div class="metric-card">
+      <span class="metric-label">Discovered</span>
+      <span class="metric-value">{{ store.globalMetrics().total_discovered | number }}</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="metric-label">Queued</span>
+      <span class="metric-value">{{ store.globalMetrics().total_queued | number }}</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="metric-label">Completed ({{ store.timeWindowFilter() | uppercase }})</span>
+      <span class="metric-value accent-green">{{ store.activeWindowStat().completed | number }}</span>
+    </div>
+
+    <!-- Audio Duration -->
+    <div class="metric-card">
+      <span class="metric-label">Audio Processed</span>
+      <span class="metric-value mono">{{ store.audioDurationFormatted() }}</span>
+    </div>
+
+    <!-- RTF -->
+    <div class="metric-card">
+      <span class="metric-label">Real-Time Factor</span>
+      <span class="metric-value mono" [class.rtf-fast]="store.realTimeFactor() > 5"
+            [class.rtf-slow]="store.realTimeFactor() < 1">
+        {{ store.realTimeFactor() | number:'1.1-1' }}x
+      </span>
+    </div>
+
+    <!-- AQI Breakdown -->
+    <div class="metric-card aqi-card">
+      <span class="metric-label">Audio Quality Index</span>
+      <div class="aqi-badges">
+        <app-aqi-badge grade="GOOD" [count]="store.activeWindowStat().good" />
+        <app-aqi-badge grade="DEGRADED" [count]="store.activeWindowStat().degraded" />
+        <app-aqi-badge grade="UNUSABLE" [count]="store.activeWindowStat().unusable" />
+      </div>
+    </div>
+
+    <!-- Dead Letter / Failures -->
+    <div class="metric-card" [class.alert-pulse]="store.globalMetrics().dead_letter_count > 0">
+      <span class="metric-label">Dead Letter</span>
+      <span class="metric-value accent-red">{{ store.globalMetrics().dead_letter_count }}</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="metric-label">Failures</span>
+      <span class="metric-value accent-red">{{ store.globalMetrics().failure_count }}</span>
+    </div>
+  </div>
+
+  <!-- Node Health Summary -->
+  <div class="node-summary">
+    <span class="node-pill healthy">
+      <span class="dot green"></span> {{ store.activeNodeCount() }} Healthy
+    </span>
+    <span class="node-pill stalled" *ngIf="false">
+      <span class="dot amber"></span> {{ store.stalledNodeCount() }} Stalled
+    </span>
+    @if (store.stalledNodeCount() > 0) {
+      <span class="node-pill stalled">
+        <span class="dot amber"></span> {{ store.stalledNodeCount() }} Stalled
+      </span>
+    }
+    @if (store.offlineNodeCount() > 0) {
+      <span class="node-pill offline">
+        <span class="dot red"></span> {{ store.offlineNodeCount() }} Offline
+      </span>
+    }
+  </div>
+</section>
