@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { InventoryStore } from '../../services/inventory-store.service';
+import { TelemetryStore } from '../../services/telemetry-store.service';
 
 @Component({
   selector: 'app-inventory-overview',
@@ -12,6 +13,7 @@ import { InventoryStore } from '../../services/inventory-store.service';
 })
 export class InventoryOverviewComponent {
   store = inject(InventoryStore);
+  telemetryStore = inject(TelemetryStore);
 
   onSearch(event: Event): void {
     const val = (event.target as HTMLInputElement).value;

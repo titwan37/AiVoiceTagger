@@ -97,6 +97,12 @@ impl StateStore {
         // Migration: Add triage_keywords_json and triage_summary columns if missing
         let _ = conn.execute("ALTER TABLE records ADD COLUMN triage_keywords_json TEXT", []);
         let _ = conn.execute("ALTER TABLE records ADD COLUMN triage_summary TEXT", []);
+        // Migration: Add priority column for RecordStrike-first processing
+        let _ = conn.execute("ALTER TABLE records ADD COLUMN priority INTEGER DEFAULT 0", []);
+        // Migration: Add legal evidence scoring columns
+        let _ = conn.execute("ALTER TABLE records ADD COLUMN legal_tags TEXT", []);
+        let _ = conn.execute("ALTER TABLE records ADD COLUMN intensity_rating INTEGER DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE records ADD COLUMN pattern_match_score REAL DEFAULT 0.0", []);
 
         Ok(())
     }
@@ -233,6 +239,7 @@ impl StateStore {
             "SELECT record_id, name, directory, date_record_day, date_last_write, length_bytes
              FROM records
              WHERE (UPPER(state) = 'DISCOVERED' OR UPPER(state) = 'QUEUED') AND (lease_expires_at IS NULL OR lease_expires_at < ?1)
+             ORDER BY COALESCE(priority, 0) DESC, length_bytes ASC
              LIMIT 1",
             params![
                 now_ts

@@ -26,10 +26,22 @@ class StatsVerbatim(BaseModel):
     count_legal: int = 0
     count_menaces: int = 0
     count_insultes: int = 0
+    count_physical_threats: int = 0
+    count_verbal_abuse: int = 0
+    count_domestic_coercion: int = 0
+    count_legal_procedural: int = 0
+    count_evidence_integrity: int = 0
     occurrences: List[str] = Field(default_factory=list)
 
     def total_matches(self) -> int:
-        return self.count_lethal + self.count_legal + self.count_menaces + self.count_insultes
+        return (
+            self.count_lethal
+            + self.count_physical_threats
+            + self.count_verbal_abuse
+            + self.count_domestic_coercion
+            + self.count_legal_procedural
+            + self.count_evidence_integrity
+        )
 
     def is_remarkable(self) -> bool:
         return self.total_matches() > 0

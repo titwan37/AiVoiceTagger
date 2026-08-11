@@ -97,6 +97,19 @@ export interface NodeTelemetry {
 }
 
 /** Aggregated global telemetry metrics. */
+export interface EvidenceStats {
+  triaged_high_count: number;
+  recordstrike_count: number;
+  high_pattern_match_count: number;
+  avg_intensity: number;
+  legal_categories: {
+    harcelement_moral: number;
+    menaces_violences: number;
+    contrainte_domestique: number;
+    obstruction_preuve: number;
+  };
+}
+
 export interface GlobalMetrics {
   total_discovered: number;
   total_queued: number;
@@ -109,6 +122,7 @@ export interface GlobalMetrics {
   failure_count: number;
   pipeline_stage_counts: PipelineStageCounts;
   time_windows?: TimeWindowStats;
+  evidence_stats?: EvidenceStats;
 }
 
 export interface TranscriptEntry {

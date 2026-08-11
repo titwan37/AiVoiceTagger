@@ -152,15 +152,11 @@ def merge_databases(dest_path: Path, source_paths: list[Path], backup: bool = Tr
                 d_rec = dest_cursor.fetchone()
 
                 if d_rec is None:
-                    # Insert new record
-                    dest_cursor.execute("""
-                        INSERT INTO records (
-                            record_id, name, directory, date_record_day, date_last_write,
-                            length_bytes, duration_seconds, speech_count, story,
-                            stats_verbatim_json, state, is_degraded, attempts, last_error,
-                            lease_owner, lease_expires_at, created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, tuple(s_rec[col] for col in s_rec.keys()))
+                    # Dynamically insert record matching source columns
+                    cols = list(s_rec.keys())
+                    col_names = ", ".join(cols)
+                    placeholders = ", ".join(["?"] * len(cols))
+                    dest_cursor.execute(f"INSERT INTO records ({col_names}) VALUES ({placeholders})", tuple(s_rec[c] for c in cols))
                     total_records_inserted += 1
                 else:
                     # Conflict Resolution: evaluate state rank & updated_at timestamp
@@ -174,24 +170,14 @@ def merge_databases(dest_path: Path, source_paths: list[Path], backup: bool = Tr
                         should_update = True
                     elif s_rank == d_rank and s_ts > d_ts:
                         should_update = True
-                    elif len(s_rec["story"]) > len(d_rec["story"]):
+                    elif len(s_rec["story"] or "") > len(d_rec["story"] or ""):
                         should_update = True
 
                     if should_update:
-                        dest_cursor.execute("""
-                            UPDATE records SET
-                                name = ?, directory = ?, date_record_day = ?, date_last_write = ?,
-                                length_bytes = ?, duration_seconds = ?, speech_count = ?, story = ?,
-                                stats_verbatim_json = ?, state = ?, is_degraded = ?, attempts = ?,
-                                last_error = ?, lease_owner = ?, lease_expires_at = ?, updated_at = ?
-                            WHERE record_id = ?
-                        """, (
-                            s_rec["name"], s_rec["directory"], s_rec["date_record_day"], s_rec["date_last_write"],
-                            s_rec["length_bytes"], s_rec["duration_seconds"], s_rec["speech_count"], s_rec["story"],
-                            s_rec["stats_verbatim_json"], s_rec["state"], s_rec["is_degraded"], s_rec["attempts"],
-                            s_rec["last_error"], s_rec["lease_owner"], s_rec["lease_expires_at"], s_rec["updated_at"],
-                            record_id
-                        ))
+                        update_cols = [c for c in s_rec.keys() if c != "record_id"]
+                        set_clause = ", ".join([f"{c} = ?" for c in update_cols])
+                        vals = [s_rec[c] for c in update_cols] + [record_id]
+                        dest_cursor.execute(f"UPDATE records SET {set_clause} WHERE record_id = ?", vals)
                         total_conflicts_resolved += 1
 
             # 2. Merge Speeches Table

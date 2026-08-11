@@ -456,6 +456,45 @@ def build_telemetry_payload():
                 "verbatim": stats
             })
 
+        # Real-time Legal Evidence Statistics & Counters
+        evidence_stats = {
+            "triaged_high_count": stage_counts.get("triaged_high", 0),
+            "recordstrike_count": 0,
+            "high_pattern_match_count": 0,
+            "avg_intensity": 0.0,
+            "legal_categories": {
+                "harcelement_moral": 0,
+                "menaces_violences": 0,
+                "contrainte_domestique": 0,
+                "obstruction_preuve": 0
+            }
+        }
+        try:
+            cursor.execute("""
+                SELECT 
+                    COUNT(CASE WHEN directory LIKE '%RecordStrike%' OR directory LIKE '%Select_Sort%' THEN 1 END) as recordstrike,
+                    COUNT(CASE WHEN pattern_match_score >= 0.75 THEN 1 END) as high_pattern_match,
+                    COALESCE(AVG(CASE WHEN intensity_rating > 0 THEN intensity_rating END), 0.0) as avg_intensity,
+                    COUNT(CASE WHEN legal_tags LIKE '%Harcèlement Moral%' THEN 1 END) as harcelement_count,
+                    COUNT(CASE WHEN legal_tags LIKE '%Menaces%' THEN 1 END) as menaces_count,
+                    COUNT(CASE WHEN legal_tags LIKE '%Contrainte Domestique%' THEN 1 END) as contrainte_count,
+                    COUNT(CASE WHEN legal_tags LIKE '%Obstruction%' THEN 1 END) as obstruction_count
+                FROM records
+            """)
+            ev_row = cursor.fetchone()
+            if ev_row:
+                evidence_stats["recordstrike_count"] = ev_row["recordstrike"] or 0
+                evidence_stats["high_pattern_match_count"] = ev_row["high_pattern_match"] or 0
+                evidence_stats["avg_intensity"] = round(ev_row["avg_intensity"] or 0.0, 1)
+                evidence_stats["legal_categories"] = {
+                    "harcelement_moral": ev_row["harcelement_count"] or 0,
+                    "menaces_violences": ev_row["menaces_count"] or 0,
+                    "contrainte_domestique": ev_row["contrainte_count"] or 0,
+                    "obstruction_preuve": ev_row["obstruction_count"] or 0
+                }
+        except Exception:
+            pass
+
         global_metrics = {
             "total_discovered": total_discovered,
             "total_queued": stage_counts["queued"],
@@ -471,7 +510,8 @@ def build_telemetry_payload():
             "dead_letter_count": dead_letter_cnt,
             "failure_count": dead_letter_cnt,
             "pipeline_stage_counts": stage_counts,
-            "time_windows": tw_stats
+            "time_windows": tw_stats,
+            "evidence_stats": evidence_stats
         }
 
         return {

@@ -4,6 +4,7 @@ scanner:
   input_directory: "\\\\SyNAS\\Records"
   input_manifest: "inventory_manifest.csv"
   excluded_extensions: [".xlsx", ".csv", ".json", ".tmp", ".bak"]
+  excluded_directories: ["#recycle", "recycle", "temp", "tmp", ".Trash"]
   recursive: true
   min_file_size_bytes: 1024
 
@@ -38,6 +39,8 @@ stt:
   watchlist_file: "watchlist.txt"
   watchlist_keywords:
     - "harcèlement"
+    - "chambre"
+    - "cagibi"
     - "menace"
     - "insulte"
     - "avocat"
@@ -48,13 +51,20 @@ stt:
     - "justice"
     - "chantage"
     - "dégage"
-    - "va chier"
+    - "casse-toi"
+    - "illégal"
+    - "police"
     - "va te faire foutre"
+    - "va chier"
     - "t'es nul"
+    - "nabot"
     - "un gros nase"
-    - "cagibi"
-    - "casser la gueule"
     - "ta gueule"
+    - "gros porc"
+    - "vermine"
+    - "gros nase"
+    - "sale blanc bec"
+    - "casser la gueule"
     - "mon frère"
 
 sidecar:
