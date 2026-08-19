@@ -1,0 +1,5 @@
+ID: rec_545f7a1d218646bf27bd82a09c02e7fa749db587, Name: 2021_01_08_17_22_40.mp3, Dir: \\SyNAS\Records\#recycle\2021
+ID: rec_d3fdc1c67286b64a7cea4a4680f9da77f4cec463, Name: summary.lst, Dir: \\SyNAS\Records\#recycle\2022-July-Dec
+ID: rec_7e4ee51aa15f227b30546309be9d4ec5744b54f1, Name: Voix 027 battle thr voice.m4a, Dir: \\SyNAS\Records\#recycle\2024
+ID: rec_56836dc27404a806fa224fa5104dd33af08ca05d, Name: Voix 026 soirée mouvementée avec Aloïs.m4a, Dir: \\SyNAS\Records\#recycle\2024-notag
+ID: rec_75b2feb9997d28a6b426315fadcc318afe7c39ae, Name: 2025-01-26_15_56_37_Voix 008.m4a, Dir: \\SyNAS\Records\#recycle\2025\Recordings

@@ -9,7 +9,7 @@ scanner:
   min_file_size_bytes: 1024
 
 state_store:
-  db_path: "aivoicetagger_state.db"
+  db_path: "aivoicetagger_state_interview.db" # <--- Changed this line
   busy_timeout_ms: 10000
   journal_mode: "WAL"
   synchronous: "NORMAL"
@@ -22,7 +22,7 @@ decoder:
 stt:
   enabled: true
   no_context: true # Prevents previous context from feeding repeating hallucination loops
-  temperature: 0.0  # Suppress temperature escalation when stuck
+  temperature: 0.0 # Suppress temperature escalation when stuck
   logprob_thold: -1.0 # Set strict logprob threshold to bail out on bad audio
   provider: "parakeet" # options: "parakeet", "whisper", "auto"
   model_path: "models/ggml-small-q8_0.bin"
@@ -36,11 +36,11 @@ stt:
   chunk_length_seconds: 30
   adaptive_multipass: true
   heavy_model_path: "models/ggml-large-v3-q5_0.bin"
-  heavy_workers: 1
-  heavy_threads_per_worker: 6
+  heavy_workers: 2
+  heavy_threads_per_worker: 5
   confidence_threshold: 0.65 # CRITICAL: Lowered to 0.65 to prevent "false negatives" where valid audio is rejected.
   intensity_threshold_rms: 0.15 # CRITICAL: Lowered to 0.15 (from 0.3) to catch quieter speech segments.
-  triage_model_path: "models/ggml-tiny-q8_0.bin" # Model for quick detection of "alive" audio.
+  triage_model_path: "models/DISABLED_FOR_FULL_TRANSCRIPT.bin" # Model for quick detection of "alive" audio.
   watchlist_file: "watchlist.txt"
   watchlist_keywords:
     - "harcèlement"

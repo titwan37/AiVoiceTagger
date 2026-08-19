@@ -345,6 +345,60 @@ You can either:
 
 ---
 
+### 🏛️ Existing High-Interest & Legal Optimization Infrastructure
+
+**AiVoiceTagger** is specially configured and optimized for extracting high-interest audio evidence and generating court-ready forensic transcripts for legal affairs under the **Swiss Legal Framework** in both **French** and **German**.
+
+The core scoring, filtering, and report generation pipeline is built across three primary scripts in the project:
+
+1. **High-Precision Evidence Scorer & Document Generator**:
+   * [generate_top_evidence_docs.py](file:///c:/Dev/AiVoiceTagger/scripts/generate_top_evidence_docs.py#L22-L67)
+   * Evaluates audio records for red-flag density and isolates **Top "All-Red-Flags-Up" Priority Records**.
+   * Filters Whisper hallucination loops, subtitle artifacts, and repeating tokens before building timestamped evidence tables.
+
+2. **Swiss Legal Statutory Mapping (Bilingual FR / DE)**:
+   * [generate_forensic_report.py](file:///c:/Dev/AiVoiceTagger/scripts/generate_forensic_report.py#L18-L100)
+   * Automatically cross-references detected verbatim phrases into French and German Swiss legal qualifications:
+     * 🔴 **WATCH_LETHAL**: Art. 180 CP / Art. 111 CP *(Art. 180 StGB / Art. 111 StGB)* — Death threats & severe violence.
+     * 🟠 **WATCH_PHYSICAL_THREATS**: Art. 180 CP & Art. 181 CP *(Art. 180 StGB & Art. 181 StGB)* — Physical assault & coercion.
+     * 🟡 **WATCH_VERBAL_ABUSE**: Art. 28, 28b CC & Art. 177 CP *(Art. 28, 28b ZGB & Art. 177 StGB)* — Personal injury & insult.
+     * 🟣 **WATCH_DOMESTIC_COERCION**: Art. 28b CC & Art. 186 CP *(Art. 28b ZGB & Art. 186 StGB)* — Domestic harassment & unlawful entry.
+     * 🔵 **WATCH_LEGAL_PROCEDURAL**: Swiss judicial, police, and attorney proceedings.
+
+3. **Multi-Model Escalate Pipeline**:
+   * [run_heavy_stt_top3.py](file:///c:/Dev/AiVoiceTagger/scripts/run_heavy_stt_top3.py#L1-L26) & [legal_evidence_scorer.py](file:///c:/Dev/AiVoiceTagger/scripts/legal_evidence_scorer.py#L1-L50)
+   * Dynamically re-runs high-interest recordings through `whisper-large-v3` (`ggml-large-v3-q5_0.bin`) to ensure 100% transcript precision for key evidence.
+
+---
+
+### 📊 Double-Column Bilingual Table Layout (French & German)
+
+While `generate_forensic_report.py` currently outputs separate `.fr.md` and `.de.md` executive reports, court transcripts can be rendered into a **side-by-side double-column table format** aligning French transcript audio with German translation/equivalents:
+
+| Horodatage (Timestamp) | Transcription Textuelle (Français) | Transkription / Übersetzung (Deutsch) | Qualification Légale (Droit Suisse / CH) |
+| :---: | :--- | :--- | :--- |
+| `[01:15 - 01:22]` | *"Je vais te défoncer si tu repasses ici."* | *"Ich werde dich fertigmachen, wenn du wieder herkommst."* | 🟠 **Art. 180 CP / StGB 180** (Menaces / Drohung) |
+| `[02:40 - 02:45]` | *"Ta gueule, tu n'as aucun droit ici."* | *"Halt's Maul, du hast hier keine Rechte."* | 🟡 **Art. 28 CC / ZGB 28** & **Art. 177 CP / StGB 177** (Injure / Beschimpfung) |
+| `[05:12 - 05:20]` | *"Si tu appelles la police, tu vas le regretter."* | *"Wenn du die Polizei anrufst, wirst du es bereuen."* | 🟠 **Art. 181 CP / StGB 181** (Contrainte / Nötigung) |
+
+---
+
+### 🚀 Running Report Generation
+
+To generate the latest forensic legal evidence documents and bilingual dashboards:
+
+```powershell
+# 1. Score & generate top priority court evidence documents
+python scripts/generate_top_evidence_docs.py
+
+# 2. Build full French & German legal forensic reports and HTML dashboards
+python scripts/generate_forensic_report.py
+```
+
+Outputs are saved under the [export](file:///c:/Dev/AiVoiceTagger/export) directory.
+
+---
+
 ## 🛡️ State Machine & Resilience
 
 `AiVoiceTagger` tracks every record in `aivoicetagger_state.db` across 10 deterministic states:
@@ -356,9 +410,14 @@ You can either:
 ```
 
 * **Atomic Leases**: Claims carry a 5-minute lease expiry. If an instance crashes mid-transcription, its assigned files are automatically reclaimed by another active worker.
+* **Graceful Shutdown & Mid-File Resume**: The engine traps `Ctrl+C` interrupts to safely stop worker threads, commit partial chunk transcriptions (`speeches`) to the SQLite database, and gracefully drop file locks. On the next run, it dynamically skips the previously processed chunks and resumes exactly where it left off.
 * **Dead-Letter Recovery**: Corrupt audio files or repeated failures land in the `dead_letter` table for audit without stopping the pipeline.
 
 ---
+
+cargo run --release -- --config config.yaml --from-csv export/TriagedHighInterest.csv --worker-id pc-alpha-1
+
+cargo run --release -- --config config.yaml --from-csv export/TriagedHighInterest.csv --worker-id pc-alpha-1 --cpu-affinity 0-5
 
 ## 📄 License
 
