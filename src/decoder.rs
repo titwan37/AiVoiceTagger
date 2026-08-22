@@ -13,7 +13,9 @@ use symphonia::core::probe::Hint;
 
 pub struct AudioProbeResult {
     pub duration_seconds: f64,
+    #[allow(dead_code)]
     pub sample_rate: u32,
+    #[allow(dead_code)]
     pub channels: u16,
     pub pcm_data: Option<Vec<f32>>,
     pub is_degraded: bool,

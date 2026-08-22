@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -130,6 +132,8 @@ pub struct RecordInfo {
     pub avg_logprob: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub triage_summary: Option<String>,
+    #[serde(default)]
+    pub processed_chunks: u32,
 }
 
 impl RecordInfo {
@@ -161,6 +165,7 @@ impl RecordInfo {
             background_noise_detected: false,
             avg_logprob: 0.0,
             triage_summary: None,
+            processed_chunks: 0,
         }
     }
 

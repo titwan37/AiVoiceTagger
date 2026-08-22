@@ -125,10 +125,10 @@ with open(md_path, "w", encoding="utf-8") as f:
     f.write("## 📊 Répartition par Nombre de Catégories Critiques Détectées\n\n")
     all_4_count = sum(1 for x in ranked if x["cat_count"] == 4)
     all_3_count = sum(1 for x in ranked if x["cat_count"] == 3)
-    # all_2_count = sum(1 for x in ranked if x["cat_count"] == 2)
+    all_2_count = sum(1 for x in ranked if x["cat_count"] == 2)
     f.write(f"- 🚨 **4 / 4 Catégories Activées (Score Maximal):** `{all_4_count}` dossiers\n")
     f.write(f"- 🟠 **3 / 4 Catégories Activées (Haute Priorité):** `{all_3_count}` dossiers\n")
-    # f.write(f"- 🟡 **2 / 4 Catégories Activées (Priorité Moyenne):** `{all_2_count}` dossiers\n\n")
+    f.write(f"- 🟡 **2 / 4 Catégories Activées (Priorité Moyenne):** `{all_2_count}` dossiers\n\n")
 
     f.write("---\n\n")
     f.write("## 🚨 Inventaire Complet des Dossiers Multi-Drapeaux Rouges (Triés par Gravité)\n\n")
@@ -149,7 +149,7 @@ print(f"✅ Generated Markdown Report: {os.path.abspath(md_path)}")
 # ==========================================
 # 3. Export Top 3 Target CSV for Heavy STT
 # ==========================================
-top3_csv_path = os.path.join(export_dir, "Top2_Priority_Records.csv")
+top3_csv_path = os.path.join(export_dir, "Top3_Priority_Records.csv")
 with open(top3_csv_path, "w", encoding="utf-8", newline="") as f:
     writer = csv.writer(f)
     writer.writerow(["RecordID", "Name", "Directory", "FlagCount", "Score", "MatchedCategories"])

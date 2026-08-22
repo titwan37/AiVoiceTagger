@@ -103,6 +103,8 @@ impl StateStore {
         let _ = conn.execute("ALTER TABLE records ADD COLUMN legal_tags TEXT", []);
         let _ = conn.execute("ALTER TABLE records ADD COLUMN intensity_rating INTEGER DEFAULT 0", []);
         let _ = conn.execute("ALTER TABLE records ADD COLUMN pattern_match_score REAL DEFAULT 0.0", []);
+        // Migration: Add processed_chunks column
+        let _ = conn.execute("ALTER TABLE records ADD COLUMN processed_chunks INTEGER DEFAULT 0", []);
 
         Ok(())
     }
@@ -118,8 +120,8 @@ impl StateStore {
             "INSERT INTO records (
                 record_id, name, directory, date_record_day, date_last_write,
                 length_bytes, duration_seconds, speech_count, story, stats_verbatim_json,
-                state, is_degraded, triage_summary, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)
+                state, is_degraded, triage_summary, processed_chunks, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)
             ON CONFLICT(record_id) DO UPDATE SET
                 state = excluded.state,
                 duration_seconds = excluded.duration_seconds,
@@ -128,6 +130,7 @@ impl StateStore {
                 stats_verbatim_json = excluded.stats_verbatim_json,
                 is_degraded = excluded.is_degraded,
                 triage_summary = COALESCE(excluded.triage_summary, records.triage_summary),
+                processed_chunks = excluded.processed_chunks,
                 updated_at = excluded.updated_at",
             params![
                 record.record_id,
@@ -142,7 +145,8 @@ impl StateStore {
                 stats_json,
                 record.state.to_string(),
                 if record.is_degraded { 1 } else { 0 },
-                record.triage_summary,
+                record.triage_summary.clone(),
+                record.processed_chunks,
                 now,
             ],
         )?;
@@ -190,6 +194,7 @@ impl StateStore {
         }
     }
 
+    #[allow(dead_code)]
     pub fn update_state(&self, record_id: &str, state: RecordState) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = Utc::now().to_rfc3339();
@@ -226,20 +231,24 @@ impl StateStore {
         Ok(())
     }
 
-    /// Atomically claim an unprocessed record using a lock-free lease.
+    /// Atomically claim an unprocessed record using a lock-free lease with immediate write transaction lock.
     pub fn claim_unprocessed_record(&self, worker_id: &str, lease_duration_secs: i64) -> Result<Option<RecordInfo>> {
         let mut conn = self.conn.lock().unwrap();
-        let tx = conn.transaction()?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .context("Failed to begin immediate SQLite transaction for claiming record")?;
 
         let now_ts = Utc::now().timestamp();
         let lease_expires_ts = now_ts + lease_duration_secs;
         let now_iso = Utc::now().to_rfc3339();
 
-        let claimed_row: Option<(String, String, String, Option<String>, String, u64)> = tx.query_row(
-            "SELECT record_id, name, directory, date_record_day, date_last_write, length_bytes
-             FROM records
-             WHERE (UPPER(state) = 'DISCOVERED' OR UPPER(state) = 'QUEUED') AND (lease_expires_at IS NULL OR lease_expires_at < ?1)
-             ORDER BY COALESCE(priority, 0) DESC, length_bytes ASC
+        let claimed_row: Option<(String, String, String, Option<String>, String, u64, u32)> = tx.query_row(
+            "SELECT record_id, name, directory, date_record_day, date_last_write, length_bytes, COALESCE(processed_chunks, 0) FROM records
+             WHERE (UPPER(state) = 'DISCOVERED' OR UPPER(state) = 'QUEUED' OR UPPER(state) = 'DECODED' OR UPPER(state) = 'TRIAGEDHIGHINTEREST')
+             AND (lease_expires_at IS NULL OR lease_expires_at < ?1)
+             ORDER BY 
+                 CASE WHEN UPPER(state) = 'TRIAGEDHIGHINTEREST' THEN 1 ELSE 0 END DESC,
+                 COALESCE(priority, 0) DESC,
+                 length_bytes ASC
              LIMIT 1",
             params![
                 now_ts
@@ -252,11 +261,12 @@ impl StateStore {
                     row.get(3)?,
                     row.get(4)?,
                     row.get(5)?,
+                    row.get(6)?,
                 ))
             },
         ).optional()?;
 
-        if let Some((record_id, name, directory, date_record_day_str, date_last_write_str, length_bytes)) = claimed_row {
+        if let Some((record_id, name, directory, date_record_day_str, date_last_write_str, length_bytes, processed_chunks)) = claimed_row {
             tx.execute(
                 "UPDATE records
                  SET state = ?1, lease_owner = ?2, lease_expires_at = ?3, updated_at = ?4
@@ -269,6 +279,39 @@ impl StateStore {
                     record_id
                 ],
             )?;
+
+            let mut existing_speeches = Vec::new();
+            {
+                let mut stmt = tx.prepare("SELECT time_frame, script, confidence, word_count, offset_ms, duration_ms, words_json FROM speeches WHERE record_id = ?1 ORDER BY offset_ms ASC")?;
+                let speeches_iter = stmt.query_map(params![record_id], |row| {
+                    let time_frame: String = row.get(0)?;
+                    let script: String = row.get(1)?;
+                    let confidence: f64 = row.get(2)?;
+                    let word_count: usize = row.get(3)?;
+                    let offset_ms: u64 = row.get(4)?;
+                    let duration_ms: u64 = row.get(5)?;
+                    let words_json: Option<String> = row.get(6)?;
+                    
+                    let words = words_json.and_then(|j| serde_json::from_str(&j).ok());
+                    Ok(crate::models::SpeechContent {
+                        time_frame,
+                        script,
+                        confidence,
+                        word_count,
+                        offset_ms,
+                        duration_ms,
+                        speaker_id: None,
+                        words,
+                    })
+                })?;
+                
+                for sp in speeches_iter {
+                    if let Ok(speech) = sp {
+                        existing_speeches.push(speech);
+                    }
+                }
+            } // stmt drops here, freeing tx
+
             tx.commit()?;
 
             let date_record_day = date_record_day_str
@@ -279,7 +322,7 @@ impl StateStore {
                 .map(|d| d.with_timezone(&chrono::Utc))
                 .unwrap_or_else(chrono::Utc::now);
 
-            let record = RecordInfo::new(
+            let mut record = RecordInfo::new(
                 record_id,
                 name,
                 directory,
@@ -287,6 +330,8 @@ impl StateStore {
                 date_last_write,
                 length_bytes,
             );
+            record.processed_chunks = processed_chunks;
+            record.speeches = existing_speeches;
             Ok(Some(record))
         } else {
             Ok(None)

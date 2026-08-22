@@ -3,6 +3,42 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+fn default_acceleration() -> String {
+    "auto".to_string()
+}
+fn default_device_id() -> usize {
+    0
+}
+fn default_true() -> bool {
+    true
+}
+fn default_min_vram() -> u64 {
+    2048
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareConfig {
+    #[serde(default = "default_acceleration")]
+    pub acceleration: String,
+    #[serde(default = "default_device_id")]
+    pub preferred_device_id: usize,
+    #[serde(default = "default_true")]
+    pub fallback_to_cpu: bool,
+    #[serde(default = "default_min_vram")]
+    pub min_vram_required_mb: u64,
+}
+
+impl Default for HardwareConfig {
+    fn default() -> Self {
+        Self {
+            acceleration: "auto".to_string(),
+            preferred_device_id: 0,
+            fallback_to_cpu: true,
+            min_vram_required_mb: 2048,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScannerConfig {
     pub input_directory: String,
@@ -41,12 +77,17 @@ pub struct SttConfig {
     pub chunk_length_seconds: u32,
     pub adaptive_multipass: Option<bool>,
     pub heavy_model_path: Option<String>,
+    pub heavy_workers: Option<usize>,
+    pub heavy_threads_per_worker: Option<usize>,
     pub confidence_threshold: Option<f64>,
     pub intensity_threshold_rms: Option<f32>,
     pub triage_model_path: Option<String>,
     pub watchlist_file: Option<String>,
     pub watchlist_keywords: Option<Vec<String>>,
     pub diarization_enabled: Option<bool>,
+    pub gpu_offload_layers: Option<i32>,
+    pub cpu_fallback_workers: Option<usize>,
+    pub cpu_fallback_threads_per_worker: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +122,8 @@ pub struct LoggingConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub hardware: HardwareConfig,
     pub scanner: ScannerConfig,
     pub state_store: StateStoreConfig,
     pub decoder: DecoderConfig,

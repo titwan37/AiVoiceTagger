@@ -1,12 +1,13 @@
 use crate::config::SttConfig;
+use crate::hardware::ComputeDevice;
 use crate::models::SpeechContent;
 use crate::vad::AudioChunk;
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::{Arc, mpsc};
 use std::thread;
-use tracing::{error, info};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState, WhisperTokenId};
+use tracing::{error, info, warn};
+use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperTokenId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SttEngineProvider {
@@ -25,30 +26,15 @@ impl SttEngineProvider {
     }
 }
 
-pub trait TranscriptionProvider: Send + Sync {
-    fn name(&self) -> &'static str;
-    fn process_chunk(&self, state: &mut WhisperState, config: &SttConfig, chunk: &AudioChunk, token_eot: WhisperTokenId) -> Result<SpeechContent>;
-}
-
-pub struct WhisperProvider;
-
-impl TranscriptionProvider for WhisperProvider {
-    fn name(&self) -> &'static str {
-        "Whisper (ggml)"
-    }
-
-    fn process_chunk(&self, state: &mut WhisperState, config: &SttConfig, chunk: &AudioChunk, token_eot: WhisperTokenId) -> Result<SpeechContent> {
-        process_chunk(state, config, chunk, token_eot)
-    }
-}
-
 pub struct SttRequest {
     pub chunk: AudioChunk,
     pub response_tx: mpsc::Sender<SttResult>,
 }
 
 pub struct SttResult {
+    #[allow(dead_code)]
     pub chunk_id: String,
+    #[allow(dead_code)]
     pub record_id: String,
     pub speech: SpeechContent,
 }
@@ -58,7 +44,7 @@ pub struct WhisperPool {
 }
 
 impl WhisperPool {
-    pub fn new(config: SttConfig, model_override: Option<&str>) -> Result<Self> {
+    pub fn new(config: SttConfig, compute_device: ComputeDevice, model_override: Option<&str>) -> Result<Self> {
         let provider_type = SttEngineProvider::parse(config.provider.as_deref());
         let model_path_str = model_override.unwrap_or(&config.model_path).to_string();
         let (request_tx, request_rx) = mpsc::channel::<SttRequest>();
@@ -69,31 +55,53 @@ impl WhisperPool {
             anyhow::bail!("STT model path does not exist: {:?}", model_path);
         }
 
+        let mut ctx_params = WhisperContextParameters::default();
+        match &compute_device {
+            ComputeDevice::Cuda { name, total_vram_mb } => {
+                info!("Enabling CUDA GPU acceleration on device: {} (VRAM: {} MB)", name, total_vram_mb);
+                ctx_params.use_gpu(true);
+            }
+            ComputeDevice::IntelGpu { name } => {
+                info!("Configuring execution for Intel GPU adapter: {}", name);
+                ctx_params.use_gpu(true);
+            }
+            ComputeDevice::Cpu { available_cores } => {
+                info!("Configuring Whisper STT context for CPU execution across {} cores", available_cores);
+                ctx_params.use_gpu(false);
+            }
+        }
+
         info!("Initializing STT pool [Engine Provider: {:?}] loading shared context from: {}", provider_type, model_path_str);
         let ctx = Arc::new(
-            WhisperContext::new_with_params(&model_path_str, WhisperContextParameters::default())
+            WhisperContext::new_with_params(&model_path_str, ctx_params)
                 .with_context(|| format!("Failed to load Whisper context from {}", model_path_str))?,
         );
         let token_eot = ctx.token_eot();
 
+        let (workers, threads_per_worker) = match compute_device {
+            ComputeDevice::Cpu { .. } => (
+                config.cpu_fallback_workers.unwrap_or(config.workers),
+                config.cpu_fallback_threads_per_worker.unwrap_or(config.threads_per_worker),
+            ),
+            ComputeDevice::Cuda { total_vram_mb, .. } => (
+                if total_vram_mb > 8192 { 2 } else { 1 },
+                config.threads_per_worker,
+            ),
+            ComputeDevice::IntelGpu { .. } => (1, config.threads_per_worker),
+        };
+
         info!(
-            "Initializing Whisper STT pool with {} persistent workers ({} threads per worker) on model {}",
-            config.workers, config.threads_per_worker, model_path_str
+            "Initializing Whisper STT pool with {} GPU/CPU workers ({} threads per worker) on model {}",
+            workers, threads_per_worker, model_path_str
         );
 
-        for worker_id in 0..config.workers {
+        for worker_id in 0..workers {
             let rx = request_rx.clone();
             let config = config.clone();
             let ctx = ctx.clone();
 
             thread::spawn(move || {
-                let mut state = match ctx.create_state() {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("[STT Worker {}] Failed to create persistent Whisper state: {:?}", worker_id, e);
-                        return;
-                    }
-                };
+                info!("[STT Worker {}] Worker thread ready for chunk requests.", worker_id);
 
                 loop {
                     let req = {
@@ -104,8 +112,20 @@ impl WhisperPool {
                         }
                     };
 
-                    match process_chunk(&mut state, &config, &req.chunk, token_eot) {
+                    let chunk_id = req.chunk.chunk_id.clone();
+                    info!("[STT Worker {}] Processing chunk {}", worker_id, chunk_id);
+
+                    // Execute chunk with fresh state & automatic retry on transient CUDA memory spikes
+                    let mut result = process_chunk(&ctx, &config, &req.chunk, token_eot);
+                    if result.is_err() {
+                        warn!("[STT Worker {}] Chunk {} initial pass encountered error. Retrying after VRAM pause...", worker_id, chunk_id);
+                        thread::sleep(std::time::Duration::from_millis(300));
+                        result = process_chunk(&ctx, &config, &req.chunk, token_eot);
+                    }
+
+                    match result {
                         Ok(speech) => {
+                            info!("[STT Worker {}] Chunk {} completed successfully.", worker_id, chunk_id);
                             let _ = req.response_tx.send(SttResult {
                                 chunk_id: req.chunk.chunk_id,
                                 record_id: req.chunk.record_id,
@@ -113,12 +133,32 @@ impl WhisperPool {
                             });
                         }
                         Err(e) => {
-                            error!("[STT Worker {}] Error processing chunk {}: {:?}", worker_id, req.chunk.chunk_id, e);
+                            error!("[STT Worker {}] Error processing chunk {}: {:?}", worker_id, chunk_id, e);
                         }
                     }
                 }
             });
         }
+
+        // Fallback: If the user requests a specific provider and it's not Whisper, spawn a single dedicated thread
+        // if provider_type != SttEngineProvider::Whisper {
+        //     info!("Using non-Whisper STT engine (Parakeet). Spawning dedicated thread.");
+            
+        //             match process_chunk(&mut state, &config, &req.chunk, token_eot) {
+        //                 Ok(speech) => {
+        //                     let _ = req.response_tx.send(SttResult {
+        //                         chunk_id: req.chunk.chunk_id,
+        //                         record_id: req.chunk.record_id,
+        //                         speech,
+        //                     });
+        //                 }
+        //                 Err(e) => {
+        //                     error!("[STT Worker {}] Error processing chunk {}: {:?}", worker_id, req.chunk.chunk_id, e);
+        //                 }
+        //             }
+        //         }
+        //     });
+        // }
 
         Ok(Self { request_tx })
     }
@@ -135,7 +175,8 @@ impl WhisperPool {
     }
 }
 
-fn process_chunk(state: &mut WhisperState, config: &SttConfig, chunk: &AudioChunk, token_eot: WhisperTokenId) -> Result<SpeechContent> {
+fn process_chunk(ctx: &WhisperContext, config: &SttConfig, chunk: &AudioChunk, token_eot: WhisperTokenId) -> Result<SpeechContent> {
+    let mut state = ctx.create_state().context("Failed to create Whisper state for chunk")?;
     let mut params = FullParams::new(SamplingStrategy::Greedy {
         best_of: config.beam_size as i32,
     });
@@ -159,13 +200,57 @@ fn process_chunk(state: &mut WhisperState, config: &SttConfig, chunk: &AudioChun
     }
 
     let chunk_id_label = chunk.chunk_id.clone();
+    let last_activity = Arc::new(std::sync::atomic::AtomicU64::new(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    ));
+
+    let last_logged_progress = Arc::new(std::sync::atomic::AtomicU8::new(0));
+
+    let last_act_progress = last_activity.clone();
+    let chunk_id_progress = chunk_id_label.clone();
+    let last_logged_progress_cb = last_logged_progress.clone();
     params.set_progress_callback_safe(move |progress| {
-        if progress > 0 && progress % 25 == 0 {
-            info!("[STT Progress] Chunk {}: {}%", chunk_id_label, progress);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        last_act_progress.store(now, std::sync::atomic::Ordering::Relaxed);
+        
+        let current_bracket = (progress / 25) as u8;
+        let last_bracket = last_logged_progress_cb.load(std::sync::atomic::Ordering::Relaxed);
+        
+        if current_bracket > last_bracket && progress > 0 {
+            let log_val = if progress >= 100 { 100 } else { current_bracket * 25 };
+            info!("[STT Progress] Chunk {}: {}%", chunk_id_progress, log_val);
+            last_logged_progress_cb.store(current_bracket, std::sync::atomic::Ordering::Relaxed);
         }
     });
 
-    state.full(params, &chunk.samples)
+    // Pad short audio input (< 100ms / 1600 samples at 16kHz) with silence to satisfy Whisper requirements
+    let padded_storage;
+    let samples_to_process: &[f32] = if chunk.samples.len() < 1600 {
+        if chunk.samples.is_empty() {
+            return Ok(crate::models::SpeechContent::new(
+                String::new(),
+                1.0,
+                chunk.start_ms,
+                chunk.end_ms.saturating_sub(chunk.start_ms),
+            ));
+        }
+        padded_storage = {
+            let mut p = chunk.samples.clone();
+            p.resize(1600, 0.0);
+            p
+        };
+        &padded_storage
+    } else {
+        &chunk.samples
+    };
+
+    state.full(params, samples_to_process)
         .context("Failed to run Whisper full transcription")?;
 
     let num_segments = state.full_n_segments();
@@ -246,6 +331,7 @@ pub fn run_triage_pass(
     )
     .context("Failed to load lightweight Triage Whisper model (ggml-tiny-q8_0.bin)")?;
 
+    // Owned by worker thread loop
     let mut state = ctx.create_state().context("Failed to create Triage Whisper state")?;
     let mut snippet_parts = Vec::new();
     let labels = ["Start", "Peak", "End"];

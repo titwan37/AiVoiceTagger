@@ -1,6 +1,7 @@
 mod config;
 mod decoder;
 mod export;
+mod hardware;
 mod models;
 mod pipeline;
 mod retry;
@@ -55,6 +56,23 @@ struct Args {
     triage_only: bool,
 }
 
+#[cfg(target_os = "windows")]
+pub fn prevent_system_sleep() {
+    extern "system" {
+        fn SetThreadExecutionState(esFlags: u32) -> u32;
+    }
+    const ES_CONTINUOUS: u32 = 0x80000000;
+    const ES_SYSTEM_REQUIRED: u32 = 0x00000001;
+    unsafe {
+        SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn prevent_system_sleep() {}
+
+
+
 fn parse_cpu_affinity(affinity_str: &str) -> usize {
     let mut mask: usize = 0;
     for part in affinity_str.split(',') {
@@ -96,8 +114,19 @@ fn set_process_cpu_affinity(_mask: usize) -> bool {
     true
 }
 
+pub static SHUTDOWN_FLAG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // 1. Prevent Windows from going to sleep while batch tagging is active
+    prevent_system_sleep();
+
+    tokio::spawn(async {
+        let _ = tokio::signal::ctrl_c().await;
+        tracing::warn!("Graceful shutdown initiated (Ctrl+C). Waiting for current chunks to finish...");
+        SHUTDOWN_FLAG.store(true, std::sync::atomic::Ordering::Relaxed);
+    });
+
     let args = Args::parse();
 
     // Initialize tracing subscriber
@@ -129,6 +158,9 @@ async fn main() -> Result<()> {
 
     let mut config = Config::load_from_file(&args.config)
         .with_context(|| format!("Failed to load configuration from {:?}", args.config))?;
+
+    let initial_device = hardware::HardwareDetector::probe_system(&config.hardware);
+    info!("Hardware Probe Initialized: Boot Device Context -> {:?}", initial_device);
 
     // Override model path if provided via CLI
     if let Some(model_override) = args.model {

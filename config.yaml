@@ -1,5 +1,11 @@
 # AiVoiceTagger Production & Local Configuration
 
+hardware:
+  acceleration: "auto"              # Options: "auto", "cuda", "openvino", "cpu"
+  preferred_device_id: 0
+  fallback_to_cpu: true
+  min_vram_required_mb: 2048
+
 scanner:
   input_directory: "\\\\SyNAS\\Records"
   input_manifest: "inventory_manifest.csv"
@@ -21,6 +27,9 @@ decoder:
 
 stt:
   enabled: true
+  gpu_offload_layers: 32            # Full offload for RTX 3060 (6GB VRAM)
+  cpu_fallback_workers: 4
+  cpu_fallback_threads_per_worker: 3
   no_context: true # Prevents previous context from feeding repeating hallucination loops
   temperature: 0.0  # Suppress temperature escalation when stuck
   logprob_thold: -1.0 # Set strict logprob threshold to bail out on bad audio

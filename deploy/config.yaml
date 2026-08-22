@@ -1,7 +1,7 @@
 # Production 20-Core CPU Tuning Configuration for AiVoiceTagger
 
 scanner:
-  input_directory: "C:\\Records\\"
+  input_directory: "\\\\SyNAS\\Records"
   excluded_extensions: [".xlsx", ".csv", ".json", ".tmp", ".bak"]
   recursive: true
   min_file_size_bytes: 1024

@@ -19,10 +19,15 @@ STATE_PRIORITY = {
     "DISCOVERED": 1,
     "QUEUED": 2,
     "DECODED": 3,
-    "TRANSCRIBED": 4,
-    "NLPDONE": 5,
-    "EXPORTED": 6,
-    "DONE": 7
+    "RETRY": 4,
+    "FAILED": 5,
+    "DEADLETTER": 6,
+    "TRIAGEDLOWINTEREST": 7,
+    "TRIAGEDHIGHINTEREST": 8,
+    "TRANSCRIBED": 9,
+    "NLPDONE": 10,
+    "EXPORTED": 11,
+    "DONE": 12
 }
 
 def get_state_rank(state_str: str) -> int:
@@ -58,7 +63,12 @@ def merge_databases(dest_path: Path, source_paths: list[Path], backup: bool = Tr
 
     # Backup destination DB if it exists
     if dest_path.exists() and backup:
-        backup_path = dest_path.with_suffix(".db.bak")
+        backup_path = dest_path.with_name(f"{dest_path.name}.bak")
+        counter = 1
+        while backup_path.exists():
+            backup_path = dest_path.with_name(f"{dest_path.name}.bak{counter}")
+            counter += 1
+            
         shutil.copy2(dest_path, backup_path)
         print(f"🛡️ Created atomic backup copy: {backup_path.name}")
 
@@ -215,16 +225,35 @@ def merge_databases(dest_path: Path, source_paths: list[Path], backup: bool = Tr
                     ))
                     total_chunks_inserted += 1
 
-            # 4. Merge Dead Letter Queue
+            # 4. Merge Dead Letter Queue (Deduplicated)
             src_cursor.execute("SELECT * FROM dead_letter")
             for dl in src_cursor.fetchall():
                 dest_cursor.execute("""
-                    INSERT INTO dead_letter (record_id, chunk_id, stage, error, context_json, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (dl["record_id"], dl["chunk_id"], dl["stage"], dl["error"], dl["context_json"], dl["created_at"]))
-                total_dead_letters_inserted += 1
+                    SELECT id FROM dead_letter 
+                    WHERE (record_id IS ? OR (record_id IS NULL AND ? IS NULL))
+                      AND (chunk_id IS ? OR (chunk_id IS NULL AND ? IS NULL))
+                      AND stage = ? 
+                      AND error = ? 
+                      AND created_at = ?
+                """, (dl["record_id"], dl["record_id"], dl["chunk_id"], dl["chunk_id"], dl["stage"], dl["error"], dl["created_at"]))
+                if dest_cursor.fetchone() is None:
+                    dest_cursor.execute("""
+                        INSERT INTO dead_letter (record_id, chunk_id, stage, error, context_json, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (dl["record_id"], dl["chunk_id"], dl["stage"], dl["error"], dl["context_json"], dl["created_at"]))
+                    total_dead_letters_inserted += 1
 
             src_conn.close()
+
+        # Deduplicate any existing duplicates in destination dead_letter table
+        dest_cursor.execute("""
+            DELETE FROM dead_letter 
+            WHERE id NOT IN (
+                SELECT MIN(id) 
+                FROM dead_letter 
+                GROUP BY COALESCE(record_id, ''), COALESCE(chunk_id, ''), stage, error, created_at
+            )
+        """)
 
         dest_conn.commit()
         print("\n==================================================")

@@ -48,17 +48,37 @@ impl Pipeline {
         let records = self.scanner.scan_or_load()?;
         info!("Discovered {} files for processing.", records.len());
 
+
+        // Populate database with newly discovered records from CSV or scanner
         for record in &records {
             if let Ok(None) = self.state_store.get_record_state(&record.record_id) {
                 let _ = self.state_store.insert_or_update_record(record);
             }
         }
 
+        // for record in &records {
+        //     let current_state = self.state_store.get_record_state(&record.record_id)?;
+
+        //     // If running full transcription, process DISCOVERED, DECODED, or TRIAGED_HIGH_INTEREST
+        //     if current_state == RecordState::Done || current_state == RecordState::TriagedLowInterest {
+        //         continue;
+        //     }
+
+        //     // Claim ticket lease and process
+        //     if self.state_store.claim_record_lease(&record.record_id, &self.worker_id)? {
+        //         self.process_single_record(record).await?;
+        //     }
+        // }
+
         let mut processed_records = Vec::new();
+
+        // Stage 1.5: Probe Hardware & GPU Engine
+        let compute_device = crate::hardware::HardwareDetector::probe_system(&self.config.hardware);
+        info!("Active Pipeline Compute Device: {:?}", compute_device);
 
         // Optional STT worker pool(s)
         let primary_stt_pool = if self.config.stt.enabled {
-            match WhisperPool::new(self.config.stt.clone(), None) {
+            match WhisperPool::new(self.config.stt.clone(), compute_device.clone(), None) {
                 Ok(p) => Some(p),
                 Err(e) => {
                     warn!("Failed to initialize primary STT pool: {:?}", e);
@@ -73,7 +93,15 @@ impl Pipeline {
         let heavy_stt_pool = if adaptive_enabled && self.config.stt.enabled {
             if let Some(heavy_path) = &self.config.stt.heavy_model_path {
                 if Path::new(heavy_path).exists() {
-                    match WhisperPool::new(self.config.stt.clone(), Some(heavy_path)) {
+                    let mut heavy_stt_config = self.config.stt.clone();
+                    heavy_stt_config.workers = self.config.stt.heavy_workers.unwrap_or(1);
+                    heavy_stt_config.threads_per_worker = self.config.stt.heavy_threads_per_worker.unwrap_or(6);
+
+                    info!(
+                        "Initializing Heavy STT pool with {} workers ({} threads per worker) on model {}",
+                        heavy_stt_config.workers, heavy_stt_config.threads_per_worker, heavy_path
+                    );
+                    match WhisperPool::new(heavy_stt_config, compute_device.clone(), Some(heavy_path)) {
                         Ok(p) => Some(p),
                         Err(e) => {
                             warn!("Heavy STT model initialization failed ({:?}). Falling back to single pass.", e);
@@ -95,8 +123,26 @@ impl Pipeline {
         let intensity_threshold = self.config.stt.intensity_threshold_rms.unwrap_or(0.15);
 
         // Worker claim loop
-        while let Ok(Some(mut record)) = self.state_store.claim_unprocessed_record(&self.worker_id, 300) {
-            info!("[Worker {}] Claimed record: {} ({})", self.worker_id, record.record_id, record.name);
+        loop {
+            let mut claim_attempts = 0;
+            let claim_res = loop {
+                match self.state_store.claim_unprocessed_record(&self.worker_id, 300) {
+                    Ok(res) => break Ok(res),
+                    Err(e) => {
+                        claim_attempts += 1;
+                        if claim_attempts <= 5 {
+                            warn!("[Worker {}] SQLite database lock busy during claim: {:?}. Retrying ({}/5)...", self.worker_id, e, claim_attempts);
+                            std::thread::sleep(std::time::Duration::from_millis(200 * claim_attempts));
+                        } else {
+                            break Err(e);
+                        }
+                    }
+                }
+            };
+
+            match claim_res {
+                Ok(Some(mut record)) => {
+                    info!("[Worker {}] Claimed record: {} ({})", self.worker_id, record.record_id, record.name);
 
             // Spawn 30-second heartbeat monitor
             let worker_lbl = self.worker_id.clone();
@@ -120,10 +166,15 @@ impl Pipeline {
                 }
             });
 
+            if crate::SHUTDOWN_FLAG.load(std::sync::atomic::Ordering::Relaxed) {
+                tracing::info!("Shutdown flag detected. Stopping worker loop.");
+                break;
+            }
+
             let path = Path::new(&record.directory).join(&record.name);
             let lock_path = std::path::PathBuf::from(format!("{}.lock", path.to_string_lossy()));
 
-            let _lock_guard = match FileLockGuard::create(lock_path, &self.worker_id, 1800) {
+            let _lock_guard = match FileLockGuard::create(lock_path, &self.worker_id, 180) {
                 Ok(Some(guard)) => guard,
                 Ok(None) => {
                     info!("Record {} ({}) has active .lock file. Skipping.", record.record_id, record.name);
@@ -199,48 +250,132 @@ impl Pipeline {
                     self.config.stt.chunk_length_seconds,
                     self.config.decoder.target_sample_rate,
                 );
-                let chunks = vad.segment_audio(&record.record_id, &pcm);
+                let mut chunks = vad.segment_audio(&record.record_id, &pcm);
+                let total_chunks = chunks.len();
+                
+                if record.processed_chunks > 0 && (record.processed_chunks as usize) < total_chunks {
+                    tracing::info!("Resuming STT for {} from chunk {}/{}", record.record_id, record.processed_chunks, total_chunks);
+                    chunks = chunks.into_iter().skip(record.processed_chunks as usize).collect();
+                }
 
                 let diarizer = crate::diarization::SpeakerDiarizer::new(
                     self.config.stt.diarization_enabled.unwrap_or(true)
                 );
 
-                // Pass 1 (Primary model)
-                for chunk in &chunks {
-                    if let Ok(rx) = pool.submit(chunk.clone()) {
-                        if let Ok(mut res) = rx.recv() {
-                            if let Ok(diarized) = diarizer.diarize_chunk(&chunk.samples, chunk.start_ms, chunk.end_ms - chunk.start_ms) {
-                                diarizer.assign_speaker_to_speech(&mut res.speech, &diarized);
-                            }
-                            record.speeches.push(res.speech);
-                        }
-                    }
-                }
+                let is_high_interest = record.state == RecordState::TriagedHighInterest;
+                let use_direct_heavy = is_high_interest && heavy_stt_pool.is_some();
 
-                let total_conf: f64 = record.speeches.iter().map(|s| s.confidence).sum();
-                let avg_confidence = if !record.speeches.is_empty() {
-                    total_conf / record.speeches.len() as f64
-                } else {
-                    1.0
-                };
-
-                let triggers_pass_two = (avg_confidence < confidence_threshold) || (probe.rms_intensity > intensity_threshold);
-
-                if triggers_pass_two && heavy_stt_pool.is_some() {
+                if use_direct_heavy {
                     let heavy_pool = heavy_stt_pool.as_ref().unwrap();
                     info!(
-                        "[Adaptive Multi-Pass] Triggering Pass 2 (Heavy Model) for record {}: avg_confidence={:.2} (threshold={:.2}), rms_intensity={:.3} (threshold={:.3})",
-                        record.record_id, avg_confidence, confidence_threshold, probe.rms_intensity, intensity_threshold
+                        "[Direct Heavy STT Fast-Path] Record {} flagged TriagedHighInterest. Directly invoking Heavy STT Model.",
+                        record.record_id
                     );
-
-                    record.speeches.clear();
-                    for chunk in &chunks {
+                    let start_time = std::time::Instant::now();
+                    for (idx, chunk) in chunks.iter().enumerate() {
+                        if crate::SHUTDOWN_FLAG.load(std::sync::atomic::Ordering::Relaxed) {
+                            tracing::warn!("Gracefully stopping Direct Heavy STT pass for {}...", record.record_id);
+                            record.processed_chunks += idx as u32;
+                            break;
+                        }
                         if let Ok(rx) = heavy_pool.submit(chunk.clone()) {
                             if let Ok(mut res) = rx.recv() {
                                 if let Ok(diarized) = diarizer.diarize_chunk(&chunk.samples, chunk.start_ms, chunk.end_ms - chunk.start_ms) {
                                     diarizer.assign_speaker_to_speech(&mut res.speech, &diarized);
                                 }
                                 record.speeches.push(res.speech);
+                                let actual_idx = record.processed_chunks as usize + idx + 1;
+                                
+                                let elapsed = start_time.elapsed().as_secs_f64();
+                                let chunks_done_session = (idx + 1) as f64;
+                                let time_per_chunk = elapsed / chunks_done_session;
+                                let chunks_left = chunks.len() - (idx + 1);
+                                let eta_secs = time_per_chunk * (chunks_left as f64);
+                                let eta_mins = (eta_secs / 60.0).floor() as u64;
+                                let eta_rem_secs = (eta_secs % 60.0) as u64;
+
+                                info!("[Global Progress] Record {} (Heavy Fast-Path): {}/{} chunks ({:.1}%) - ETA: {}m {:02}s", record.record_id, actual_idx, total_chunks, (actual_idx as f64 / total_chunks as f64) * 100.0, eta_mins, eta_rem_secs);
+                            }
+                        }
+                    }
+                    if !crate::SHUTDOWN_FLAG.load(std::sync::atomic::Ordering::Relaxed) {
+                        record.processed_chunks = total_chunks as u32;
+                    }
+                } else {
+                    // Pass 1 (Primary model)
+                    let start_time = std::time::Instant::now();
+                    for (idx, chunk) in chunks.iter().enumerate() {
+                        if crate::SHUTDOWN_FLAG.load(std::sync::atomic::Ordering::Relaxed) {
+                            tracing::warn!("Gracefully stopping Pass 1 STT for {}...", record.record_id);
+                            record.processed_chunks += idx as u32;
+                            break;
+                        }
+                        if let Ok(rx) = pool.submit(chunk.clone()) {
+                            if let Ok(mut res) = rx.recv() {
+                                if let Ok(diarized) = diarizer.diarize_chunk(&chunk.samples, chunk.start_ms, chunk.end_ms - chunk.start_ms) {
+                                    diarizer.assign_speaker_to_speech(&mut res.speech, &diarized);
+                                }
+                                record.speeches.push(res.speech);
+                                let actual_idx = record.processed_chunks as usize + idx + 1;
+
+                                let elapsed = start_time.elapsed().as_secs_f64();
+                                let chunks_done_session = (idx + 1) as f64;
+                                let time_per_chunk = elapsed / chunks_done_session;
+                                let chunks_left = chunks.len() - (idx + 1);
+                                let eta_secs = time_per_chunk * (chunks_left as f64);
+                                let eta_mins = (eta_secs / 60.0).floor() as u64;
+                                let eta_rem_secs = (eta_secs % 60.0) as u64;
+
+                                info!("[Global Progress] Record {} (Pass 1): {}/{} chunks ({:.1}%) - ETA: {}m {:02}s", record.record_id, actual_idx, total_chunks, (actual_idx as f64 / total_chunks as f64) * 100.0, eta_mins, eta_rem_secs);
+                            }
+                        }
+                    }
+                    if !crate::SHUTDOWN_FLAG.load(std::sync::atomic::Ordering::Relaxed) {
+                        record.processed_chunks = total_chunks as u32;
+                    }
+
+                    let total_conf: f64 = record.speeches.iter().map(|s| s.confidence).sum();
+                    let avg_confidence = if !record.speeches.is_empty() {
+                        total_conf / record.speeches.len() as f64
+                    } else {
+                        1.0
+                    };
+
+                    let triggers_pass_two = (avg_confidence < confidence_threshold) || (probe.rms_intensity > intensity_threshold);
+
+                    if triggers_pass_two && heavy_stt_pool.is_some() {
+                        let heavy_pool = heavy_stt_pool.as_ref().unwrap();
+                        info!(
+                            "[Adaptive Multi-Pass] Triggering Pass 2 (Heavy Model) for record {}: avg_confidence={:.2} (threshold={:.2}), rms_intensity={:.3} (threshold={:.3})",
+                            record.record_id, avg_confidence, confidence_threshold, probe.rms_intensity, intensity_threshold
+                        );
+
+                        record.speeches.clear();
+                        let start_time = std::time::Instant::now();
+                        for (idx, chunk) in chunks.iter().enumerate() {
+                            if crate::SHUTDOWN_FLAG.load(std::sync::atomic::Ordering::Relaxed) {
+                                tracing::warn!("Gracefully stopping Pass 2 STT for {}... (Will restart Pass 2 on resume)", record.record_id);
+                                record.processed_chunks = 0; // Reset so next time it starts from 0 for Pass 1. (Fallback)
+                                record.speeches.clear();
+                                break;
+                            }
+                            if let Ok(rx) = heavy_pool.submit(chunk.clone()) {
+                                if let Ok(mut res) = rx.recv() {
+                                    if let Ok(diarized) = diarizer.diarize_chunk(&chunk.samples, chunk.start_ms, chunk.end_ms - chunk.start_ms) {
+                                        diarizer.assign_speaker_to_speech(&mut res.speech, &diarized);
+                                    }
+                                    record.speeches.push(res.speech);
+                                    
+                                    let elapsed = start_time.elapsed().as_secs_f64();
+                                    let chunks_done_session = (idx + 1) as f64;
+                                    let time_per_chunk = elapsed / chunks_done_session;
+                                    let chunks_left = chunks.len() - (idx + 1);
+                                    let eta_secs = time_per_chunk * (chunks_left as f64);
+                                    let eta_mins = (eta_secs / 60.0).floor() as u64;
+                                    let eta_rem_secs = (eta_secs % 60.0) as u64;
+
+                                    info!("[Global Progress] Record {} (Pass 2): {}/{} chunks ({:.1}%) - ETA: {}m {:02}s", record.record_id, idx + 1, total_chunks, ((idx + 1) as f64 / total_chunks as f64) * 100.0, eta_mins, eta_rem_secs);
+                                }
                             }
                         }
                     }
@@ -289,6 +424,13 @@ impl Pipeline {
             self.state_store.insert_or_update_record(&record)?;
             processed_records.push(record);
             let _ = stop_heartbeat_tx.send(());
+                },
+                Ok(None) => break, // No more records
+                Err(e) => {
+                    error!("Error claiming record: {:?}", e);
+                    break;
+                }
+            }
         }
 
         // Stage 5: Export aggregated outputs
@@ -315,8 +457,10 @@ fn run_sidecar_ipc(config: &Config, record: &RecordInfo) -> Result<RecordInfo> {
 
     let stdout = child.stdout.take().context("Failed to open child stdout")?;
     let mut reader = BufReader::new(stdout);
-    let mut line = String::new();
-    reader.read_line(&mut line)?;
+    let mut buf = Vec::new();
+    reader.read_until(b'\n', &mut buf)?;
+
+    let line = String::from_utf8_lossy(&buf);
 
     let enriched: RecordInfo = serde_json::from_str(line.trim())
         .context("Failed to parse sidecar response JSON")?;
