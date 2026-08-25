@@ -104,7 +104,15 @@ impl FileScanner {
         let mut records = Vec::new();
         let walker = walkdir::WalkDir::new(input_path)
             .max_depth(if self.config.recursive { usize::MAX } else { 1 })
-            .into_iter();
+            .into_iter()
+            .filter_entry(|e| {
+                if let Some(name) = e.file_name().to_str() {
+                    if let Some(excluded) = &self.config.excluded_directories {
+                        return !excluded.iter().any(|d| d.to_lowercase() == name.to_lowercase());
+                    }
+                }
+                true
+            });
 
         for entry in walker.filter_map(|e| e.ok()) {
             let path = entry.path();

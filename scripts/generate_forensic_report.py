@@ -12,6 +12,11 @@ import os
 import re
 import sqlite3
 import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 from datetime import datetime
 
 # Define Watch Categories & Swiss Legal Qualification Mappings (Bilingual)
@@ -165,7 +170,8 @@ def generate_markdown_report(export_dir, lang, data):
             f.write(f"| **{cat_data['title']}** | {cat_data['qualification']} | `{data['category_counts'][cat_key]:,}` |\n")
 
         f.write("\n---\n\n")
-        f.write(f"## 📈 {'Histogramme & Trajectoire d\'Escalade (2015–2026)' if is_fr else 'Histogramm & Eskalationsverlauf (2015–2026)'}\n\n")
+        histo_title = "## 📈 Histogramme & Trajectoire d'Escalade (2015–2026)" if is_fr else "## 📈 Histogramm & Eskalationsverlauf (2015–2026)"
+        f.write(f"{histo_title}\n\n")
         if is_fr:
             f.write("| Année | Total Fichiers | Indices Élevés | Injonctions Expulsion | Injures / Attaques | Menaces de Violences | Coercition / Emprise | Visualisation |\n")
         else:
@@ -207,6 +213,27 @@ def generate_html_dashboard(export_dir, lang, data):
 
     title = "🇨🇭 AiVoiceTagger — Tableau de Bord Forensique (Droit Suisse)" if is_fr else "🇨🇭 AiVoiceTagger — Forensisches Dashboard (Schweizer Recht)"
     subtitle = f"Généré le {data['timestamp_str']} | Juridiction Suisse | CC RS 210, CO RS 220, CP RS 311.0" if is_fr else f"Erstellt am {data['timestamp_str']} | Schweizer Gerichtsbarkeit | ZGB SR 210, OR SR 220, StGB SR 311.0"
+
+    # Define variables to avoid backslashes inside f-strings
+    legal_title = "Cadre Légal Suisse Applicable" if is_fr else "Anwendbare Schweizer Rechtsgrundlagen"
+    legal_basis_html = (
+        '<p><strong>• Protection de la personnalité (Art. 28 & 28b CC RS 210):</strong> Atteinte illicite, harcèlement psychologique & stalking.</p>'
+        '<p><strong>• Menaces (Art. 180 CP RS 311.0):</strong> Intimidation & menaces de violences physiques.</p>'
+        '<p><strong>• Contrainte (Art. 181 CP RS 311.0):</strong> Coercition & entrave à la liberté d\'action.</p>'
+        '<p><strong>• Violation de domicile (Art. 186 CP RS 311.0):</strong> Intrusion & injonctions forcées d\'expulsion.</p>'
+        '<p><strong>• Tort Moral (Art. 41 & 49 CO RS 220):</strong> Réparation financière du préjudice moral.</p>'
+        if is_fr else
+        '<p><strong>• Persönlichkeitsschutz (Art. 28 & 28b ZGB SR 210):</strong> Widerrechtliche Verletzungen, psychische Nachstellung & Mobbing.</p>'
+        '<p><strong>• Drohung (Art. 180 StGB SR 311.0):</strong> Versetzen in Angst und Schrecken durch Gewaltandrohung.</p>'
+        '<p><strong>• Nötigung (Art. 181 StGB SR 311.0):</strong> Rechtswidrige Einschränkung der Handlungsfreiheit.</p>'
+        '<p><strong>• Hausfriedensbruch (Art. 186 StGB SR 311.0):</strong> Unberechtigtes Eindringen & Ausweisungsdruck.</p>'
+        '<p><strong>• Genugtuung (Art. 41 & 49 OR SR 220):</strong> Finanzieller Ausgleich für seelischen Schmerz.</p>'
+    )
+    escalation_title = "📊 Histogramme de la Trajectoire d'Escalade (Eskalationsverlauf)" if is_fr else "📊 Histogramm des Eskalationsverlaufs (Eskalationsverlauf)"
+    cat_summary_title = "Répartition des Catégories de Surveillance" if is_fr else "Übersicht der Überwachungskategorien"
+    pattern_density_title = "Tableau de Densité de Motifs (2015–2026)" if is_fr else "Musterdichte-Tabelle (2015–2026)"
+    evidence_register_title = f"Registre des Preuves Principales ({len(data['triaged_high_interest']):,} Total)" if is_fr else f"Hauptbeweismittel-Register ({len(data['triaged_high_interest']):,} Total)"
+    search_placeholder = "Rechercher par nom de fichier, mot-clé, ou année..." if is_fr else "Suche nach Dateiname, Schlüsselwort oder Jahr..."
 
     # Prepare datasets for Chart.js Histogram
     chart_years = [str(y) for y in data['sorted_years']]
@@ -319,19 +346,19 @@ def generate_html_dashboard(export_dir, lang, data):
     </div>
 
     <div class="legal-box">
-        <h3>🇨🇭 {'Cadre Légal Suisse Applicable' if is_fr else 'Anwendbare Schweizer Rechtsgrundlagen'}</h3>
-        {'<p><strong>• Protection de la personnalité (Art. 28 & 28b CC RS 210):</strong> Atteinte illicite, harcèlement psychologique & stalking.</p><p><strong>• Menaces (Art. 180 CP RS 311.0):</strong> Intimidation & menaces de violences physiques.</p><p><strong>• Contrainte (Art. 181 CP RS 311.0):</strong> Coercition & entrave à la liberté d\'action.</p><p><strong>• Violation de domicile (Art. 186 CP RS 311.0):</strong> Intrusion & injonctions forcées d\'expulsion.</p><p><strong>• Tort Moral (Art. 41 & 49 CO RS 220):</strong> Réparation financière du préjudice moral.</p>' if is_fr else '<p><strong>• Persönlichkeitsschutz (Art. 28 & 28b ZGB SR 210):</strong> Widerrechtliche Verletzungen, psychische Nachstellung & Mobbing.</p><p><strong>• Drohung (Art. 180 StGB SR 311.0):</strong> Versetzen in Angst und Schrecken durch Gewaltandrohung.</p><p><strong>• Nötigung (Art. 181 StGB SR 311.0):</strong> Rechtswidrige Einschränkung der Handlungsfreiheit.</p><p><strong>• Hausfriedensbruch (Art. 186 StGB SR 311.0):</strong> Unberechtigtes Eindringen & Ausweisungsdruck.</p><p><strong>• Genugtuung (Art. 41 & 49 OR SR 220):</strong> Finanzieller Ausgleich für seelischen Schmerz.</p>'}
+        <h3>🇨🇭 {legal_title}</h3>
+        {legal_basis_html}
     </div>
 
     <!-- 📊 HISTOGRAM CHART OF ESKALATIONSVERLAUF -->
     <div class="chart-box">
-        <h2 class="section-title">📊 {'Histogramme de la Trajectoire d\'Escalade (Eskalationsverlauf)' if is_fr else 'Histogramm des Eskalationsverlaufs (Eskalationsverlauf)'}</h2>
+        <h2 class="section-title">{escalation_title}</h2>
         <div class="chart-container">
             <canvas id="escalationChart"></canvas>
         </div>
     </div>
 
-    <h2 class="section-title">🏷️ {'Répartition des Catégories de Surveillance' if is_fr else 'Übersicht der Überwachungskategorien'}</h2>
+    <h2 class="section-title">🏷️ {cat_summary_title}</h2>
     <div class="cats-grid">
 """
     for cat_key, cat_data in watch_cats.items():
@@ -347,7 +374,7 @@ def generate_html_dashboard(export_dir, lang, data):
     html_content += f"""
     </div>
 
-    <h2 class="section-title">📈 {'Tableau de Densité de Motifs (2015–2026)' if is_fr else 'Musterdichte-Tabelle (2015–2026)'}</h2>
+    <h2 class="section-title">📈 {pattern_density_title}</h2>
     <table>
         <thead>
             <tr>
@@ -381,8 +408,8 @@ def generate_html_dashboard(export_dir, lang, data):
         </tbody>
     </table>
 
-    <h2 class="section-title">🚨 {'Registre des Preuves Principales' if is_fr else 'Hauptbeweismittel-Register'} ({len(data['triaged_high_interest']):,} Total)</h2>
-    <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="{'Rechercher par nom de fichier, mot-clé, ou année...' if is_fr else 'Suche nach Dateiname, Schlüsselwort oder Jahr...'}">
+    <h2 class="section-title">🚨 {evidence_register_title}</h2>
+    <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="{search_placeholder}">
 
     <table id="evidenceTable">
         <thead>

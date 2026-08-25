@@ -30,6 +30,8 @@ def copy_project(source_dir, dest_dir):
         'release', 
         '.DS_Store',
         '__pycache__',
+        '.pcm_cache',
+        '*.tmp',
         '.vite',
         '*.lock',
         '*.db*'

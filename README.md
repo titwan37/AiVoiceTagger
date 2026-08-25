@@ -431,9 +431,115 @@ Outputs are saved under the [export](file:///c:/Dev/AiVoiceTagger/export) direct
 
 ---
 
-cargo run --release -- --config config.yaml --from-csv export/TriagedHighInterest.csv --worker-id pc-alpha-1
+## 🔮 Tripartite Post-Analytics & 3D Spatial Intelligence
 
-cargo run --release -- --config config.yaml --from-csv export/TriagedHighInterest.csv --worker-id pc-alpha-1 --cpu-affinity 0-5
+Post-processing operates across three synchronized analytical dimensions according to [Analytics_Architecture_v1.md](file:///c:/Dev/AiVoiceTagger/docs/Analytics_Architecture_v1.md):
+
+1. **Discourse & Semantic Dynamics (Polars):** Exact talk-time ratios, conversational dominance, n-gram lexical repetition loops (*"dégage"*, *"tu sors"*), and Audio Quality Index (AQI) correlations.
+2. **Swiss Forensic Legal Qualification (CP / CC):** Evidentiary structure for Art. 180 CP (*Drohung* / Menaces), Art. 181 CP (*Nötigung* / Contrainte), Art. 177 CP (*Beschimpfung* / Injure), Art. 186 CP (*Hausfriedensbruch*), and Art. 28, 28b CC (*ZGB*).
+3. **Psychodynamics & Coercive Control:** Projective identification, splitting, double-bind directives, and family triangulation / parental alienation dynamics.
+4. **3D WebGL / R3F Spatial Intelligence Visualizer:** GPU-accelerated 3D manifold ($X, Y$ semantic plane, $Z$ acoustic agitation RMS), Swiss statutory cylindrical constellation, and psychodynamic tensor field with custom GLSL agitation & crisis heatmap shaders.
+
+### 📊 Implementation Coverage Matrix
+
+| Analytical Dimension | Architectural Capability | Implementation Component | Status |
+| :--- | :--- | :--- | :---: |
+| **Discourse Semantics** | Talk-time ratios, n-gram lexical loops, timestamped transcripts | `scripts/generate_tripartite_post_analytics.py` | **100%** |
+| **Swiss Forensic Law** | Art. 180, 181, 177, 186 CP & Art. 28/28b CC qualification | `scripts/generate_tripartite_post_analytics.py` | **100%** |
+| **Psychodynamics** | Coercive control, projective identification, alienation analysis | `scripts/generate_tripartite_post_analytics.py` | **100%** |
+| **Court Dossier Exports** | Markdown Dossiers (`Report_*.md`) & JSON Telemetry (`Telemetry_*.json`) | `scripts/generate_tripartite_post_analytics.py` | **100%** |
+| **3D Data Bridge** | 2D UMAP plane, RMS intensity $Z$, cylindrical statutory mapping | `scripts/export_post_analytics_3d.py` | **100%** |
+| **GLSL Shaders** | RMS agitation waves, gravitational attractor vortexes, crisis heatmaps | `dashboard/src/app/visualizer/shaders.ts` | **100%** |
+| **3D WebGL Canvas** | Three toggleable projection layers (`SEMANTIC`, `LEGAL`, `PSYCHODYNAMIC`) | `dashboard/src/app/visualizer/ForensicVisualizer3D.tsx` | **100%** |
+| **Sidecar REST APIs** | `GET /api/post_analytics/reports` & `GET /api/post_analytics/3d` | `sidecar/server.py` | **100%** |
+
+---
+
+### 🔮 Semi-Supervised Self-Training & Reclassification
+To refine speaker profiles and increase identification coverage, you can leverage existing high-confidence matches to automatically update speaker centroids and run a second-pass reclassification of unmatched or third-party segments:
+
+*   **Centroid Self-Training**: Iterates through database segments matching target speakers with confidence $\ge \tau$, extracts their embeddings in batch, and performs a sample-size weighted centroid recalculation.
+*   **Actor-Specific Thresholds**: Support custom target thresholds per actor to handle voice changes over time (e.g., Alois/Dinda).
+*   **Second-Pass Reclassification**: Scan previously unidentified segments (`SPEAKER_THIRD_PARTY` or `Speaker Unknown`) using the newly enriched centroids to boost overall identification rates.
+
+```powershell
+# 1. Run self-training centroid enrichment (Default threshold 0.77)
+python scripts/enroll_and_identify_speakers.py --self-train
+
+# 2. Run self-training with actor-specific overrides (highly recommended for voice drifts)
+python scripts/enroll_and_identify_speakers.py --self-train --self-train-thresholds "Al:0.42,DD:0.44"
+
+# 3. Run self-training AND immediately reclassify unmatched segments
+python scripts/enroll_and_identify_speakers.py --self-train --self-train-thresholds "Al:0.42,DD:0.44" --reclassify-unmatched
+
+# 4. Run reclassification only (uses the cached/enriched centroids in the database)
+python scripts/enroll_and_identify_speakers.py --reclassify-unmatched --limit 50
+```
+
+---
+
+### 📊 Actor-Centric Speech Clustering & Data Science Export
+To enable downstream psychological, linguistic, or data science studies (e.g., longitudinal analysis of vocal drift or stress behaviors between 2020 and 2026), you can group all matched speech segments by speaker into individual data portfolios:
+
+*   **Flat Tabular Exports (`.csv`)**: Generates a consolidated table of all segment timestamps, file paths, transcripts, and acoustic biomarkers ready for direct Pandas or R ingestion.
+*   **JSON Portfolios (`.json`)**: Formats the actor's history, metadata, and year-by-year aggregate vocal metrics into a nested, machine-readable portfolio.
+*   **Longitudinal Reports (`.txt`)**: Summarizes vocal trends (F0 pitch, vocal strain, speech rate) year-by-year, automatically highlighting significant deviations.
+
+```powershell
+# 1. Export clusters for all actors using default settings (min-confidence >= 0.70)
+python scripts/enroll_and_identify_speakers.py --export-actor-clusters
+
+# 2. Export clusters with custom confidence thresholds and custom directory
+python scripts/enroll_and_identify_speakers.py --export-actor-clusters --min-cluster-confidence 0.66 --cluster-output-dir "export/custom_clusters"
+```
+
+---
+
+## 🧬 Voice Biometric Identification & Acoustic Stress Biomarkers
+
+AiVoiceTagger transitions from relative speaker clustering to **Supervised Biometric Voiceprint Matching** using 192-dimensional D-Vector embeddings (**ECAPA-TDNN**):
+
+* **Voice Vault Reference Profiles:** Drops 3–10s single-speaker audio samples into `profiles/<Actor_Name>/*.wav` to compute canonical centroids.
+* **Vectorized Cosine Similarity:** Re-tags the 32,284 database sentences based on threshold matching ($\tau \ge 0.72$) with ambiguity guard ($\Delta\text{Sim} < 0.06$).
+* **Acoustic Biomarkers Extractor:** Measures Fundamental Frequency ($F_0$ pitch), Vocal Strain Index (high-frequency tension under threat), and Speech Rate (WPM).
+* **Resumable & Interrupt-Safe**: Built-in per-record SQLite transaction commits (`conn.commit()`) and `Ctrl+C` signal handling allow seamless interruption and resumption without losing work.
+
+```powershell
+# 1. Build Voice Vault & identify actors across database records (Auto-Resumable)
+python scripts/enroll_and_identify_speakers.py --db-path "aivoicetagger_state.db"
+
+# 2. Force re-processing of all records (ignoring existing checkpoints)
+python scripts/enroll_and_identify_speakers.py --db-path "aivoicetagger_state.db" --force
+```
+
+---
+
+## 🛡️ Dual Privacy Governance (GDPR / Swiss nLPD & Judicial Forensics)
+
+To comply with data privacy standards (GDPR / Swiss revised LPD) while supporting unredacted criminal/civil court submissions (**Art. 180, 181, 177, 186 CP & Art. 28, 28b CC**), the state store maintains dual participant representations:
+
+| Analytical Context | Speeches Column | Records Column | Output Type |
+| :--- | :--- | :--- | :--- |
+| **🔒 Public / GDPR View** | `speaker_anonymized` (`Speaker 01`, `Speaker 02`) | `participants_anonymized_json` | Public WebGL 3D scene, research demo |
+| **⚖️ Certified Judicial View** | `speaker_disclosed` (`AF`, `CI`, `AM`) | `participants_disclosed_json` | Court-admissible forensic dossier |
+
+### 🚀 Turnkey Guidance & Command Execution
+
+```powershell
+# 1. Generate CERTIFIED forensic dossiers (with real actor names)
+python scripts/generate_tripartite_post_analytics.py --db-path "aivoicetagger_state.db" --min-score 300 --limit 5
+
+# 2. Generate GDPR / LPD ANONYMIZED dossiers (Speaker 01, Speaker 02...)
+python scripts/generate_tripartite_post_analytics.py --db-path "aivoicetagger_state.db" --anonymize --limit 5
+
+# 3. Export 3D constellation payload for WebGL visualizer (Public Anonymized)
+python scripts/export_post_analytics_3d.py --db-path "aivoicetagger_state.db" --anonymize
+
+# 4. Query live 3D constellation via API with on-the-fly GDPR redaction
+curl "http://localhost:9090/api/post_analytics/3d?anonymized=true"
+```
+
+---
 
 ## 📄 License
 

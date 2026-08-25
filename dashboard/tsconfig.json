@@ -19,7 +19,8 @@
     "module": "ES2022",
     "lib": ["ES2022", "dom"],
     "skipLibCheck": true,
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "jsx": "react-jsx"
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

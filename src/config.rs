@@ -43,6 +43,7 @@ impl Default for HardwareConfig {
 pub struct ScannerConfig {
     pub input_directory: String,
     pub excluded_extensions: Vec<String>,
+    pub excluded_directories: Option<Vec<String>>,
     pub recursive: bool,
     pub min_file_size_bytes: u64,
     pub input_manifest: Option<String>,

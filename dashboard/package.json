@@ -15,6 +15,8 @@
     "ng": "ng",
     "start": "ng serve --open",
     "build": "ng build",
+    "build:sim": "ng build --configuration sim --base-href /aivoicetagger/",
+    "build:prod": "ng build --configuration production --base-href /aivoicetagger/",
     "dev": "ng serve --open"
   },
   "private": true,
@@ -28,12 +30,20 @@
     "@angular/platform-browser-dynamic": "^21.2.19",
     "rxjs": "~7.8.0",
     "tslib": "^2.6.0",
-    "zone.js": "~0.15.0"
+    "zone.js": "~0.15.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "three": "^0.160.0",
+    "@react-three/fiber": "^8.15.12",
+    "@react-three/drei": "^9.96.1"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^21.2.19",
     "@angular/cli": "^21.2.19",
     "@angular/compiler-cli": "^21.2.19",
-    "typescript": "~5.9.0"
+    "typescript": "~5.9.0",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@types/three": "^0.160.0"
   }
 }

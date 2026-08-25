@@ -14,10 +14,14 @@ import csv
 import json
 import sqlite3
 import sys
+import urllib.parse
 from datetime import datetime, timezone, timedelta
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from io import StringIO
 from pathlib import Path
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "aivoicetagger_state.db"
@@ -87,7 +91,15 @@ def retry_dead_letter_record(record_id: str):
     finally:
         conn.close()
 
+TELEMETRY_CACHE = None
+TELEMETRY_CACHE_TIME = 0.0
+
 def build_telemetry_payload():
+    global TELEMETRY_CACHE, TELEMETRY_CACHE_TIME
+    now_ts_sec = datetime.now().timestamp()
+    if TELEMETRY_CACHE is not None and (now_ts_sec - TELEMETRY_CACHE_TIME) < 2.0:
+        return TELEMETRY_CACHE
+
     conn = get_db_connection(read_only=True)
     now_iso = datetime.now().isoformat()
     now_ts = int(datetime.now().timestamp())
@@ -514,7 +526,7 @@ def build_telemetry_payload():
             "evidence_stats": evidence_stats
         }
 
-        return {
+        res = {
             "timestamp": now_iso,
             "global": global_metrics,
             "nodes": nodes,
@@ -522,6 +534,9 @@ def build_telemetry_payload():
             "dead_letters": dead_letters,
             "is_paused": IS_PAUSED
         }
+        TELEMETRY_CACHE = res
+        TELEMETRY_CACHE_TIME = now_ts_sec
+        return res
 
     finally:
         conn.close()
@@ -562,7 +577,15 @@ def generate_csv_report():
     finally:
         conn.close()
 
+INVENTORY_CACHE = None
+INVENTORY_CACHE_TIME = 0.0
+
 def fetch_inventory_intelligence():
+    global INVENTORY_CACHE, INVENTORY_CACHE_TIME
+    now_ts = datetime.now().timestamp()
+    if INVENTORY_CACHE is not None and (now_ts - INVENTORY_CACHE_TIME) < 5.0:
+        return INVENTORY_CACHE
+
     manifest_path = BASE_DIR / "inventory_manifest.csv"
     pc1_path = BASE_DIR / "inventory_pc1.csv"
     pc2_path = BASE_DIR / "inventory_pc2.csv"
@@ -725,7 +748,7 @@ def fetch_inventory_intelligence():
         finally:
             db_conn.close()
 
-    return {
+    res = {
         "partition_balance": {
             "master_count": master_count,
             "pc1_count": pc1_count,
@@ -742,6 +765,9 @@ def fetch_inventory_intelligence():
         "top_folders": top_folders,
         "records": records
     }
+    INVENTORY_CACHE = res
+    INVENTORY_CACHE_TIME = now_ts
+    return res
 
 class TelemetryHandler(BaseHTTPRequestHandler):
     def _set_headers(self, content_type="application/json", status=200, content_length=None):
@@ -759,7 +785,8 @@ class TelemetryHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            path = self.path.split("?")[0]
+            parsed_url = urllib.parse.urlparse(self.path)
+            path = parsed_url.path
             if path in ("/api/telemetry", "/api/telemetry/", "/api/telemetry/ws", "/api/telemetry/ws/"):
                 data = build_telemetry_payload()
                 body = json.dumps(data).encode("utf-8")
@@ -773,6 +800,49 @@ class TelemetryHandler(BaseHTTPRequestHandler):
             elif path in ("/api/dead_letters", "/api/dead_letters/"):
                 dead_letters = fetch_dead_letters()
                 body = json.dumps({"dead_letters": dead_letters}).encode("utf-8")
+                self._set_headers("application/json", content_length=len(body))
+                self.wfile.write(body)
+            elif path in ("/api/post_analytics/reports", "/api/post_analytics/reports/"):
+                post_analytics_dir = BASE_DIR / "export" / "post_analytics"
+                reports = []
+                if post_analytics_dir.exists():
+                    for f in sorted(post_analytics_dir.glob("Report_*.md"), key=lambda x: x.stat().st_mtime, reverse=True):
+                        telem_file = post_analytics_dir / f.name.replace("Report_", "Telemetry_").replace(".md", ".json")
+                        telem_data = {}
+                        if telem_file.exists():
+                            try:
+                                with open(telem_file, "r", encoding="utf-8") as jf:
+                                    telem_data = json.load(jf)
+                            except Exception:
+                                pass
+                        reports.append({
+                            "report_file": f.name,
+                            "modified_at": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+                            "telemetry": telem_data
+                        })
+                body = json.dumps({"reports": reports, "count": len(reports)}).encode("utf-8")
+                self._set_headers("application/json", content_length=len(body))
+                self.wfile.write(body)
+            elif path in ("/api/post_analytics/3d", "/api/post_analytics/3d/"):
+                query_params = urllib.parse.parse_qs(parsed_url.query)
+                is_anonymized = query_params.get("anonymized", ["false"])[0].lower() in ("true", "1", "yes")
+                
+                try:
+                    from scripts.export_post_analytics_3d import generate_3d_constellation  # type: ignore
+                    constellation_data = generate_3d_constellation(str(DB_PATH), anonymize=is_anonymized)
+                except Exception as e:
+                    # Fallback to reading file if available
+                    constellation_path = BASE_DIR / "export" / "post_analytics" / "3d_constellation.json"
+                    if constellation_path.exists():
+                        try:
+                            with open(constellation_path, "r", encoding="utf-8") as cf:
+                                constellation_data = json.load(cf)
+                        except Exception:
+                            constellation_data = {"error": f"Failed reading 3D constellation: {e}", "nodes": []}
+                    else:
+                        constellation_data = {"error": f"3D constellation not generated yet: {e}", "nodes": []}
+                
+                body = json.dumps(constellation_data).encode("utf-8")
                 self._set_headers("application/json", content_length=len(body))
                 self.wfile.write(body)
             elif path in ("/api/export/csv", "/api/export/csv/"):
@@ -834,7 +904,7 @@ class TelemetryHandler(BaseHTTPRequestHandler):
             self._set_headers("application/json", status=404)
             self.wfile.write(json.dumps({"error": "Unknown control endpoint"}).encode("utf-8"))
 
-class QuietHTTPServer(HTTPServer):
+class QuietHTTPServer(ThreadingHTTPServer):
     def handle_error(self, request, client_address):
         import sys
         exc_type, exc_val, _ = sys.exc_info()
@@ -843,7 +913,7 @@ class QuietHTTPServer(HTTPServer):
         super().handle_error(request, client_address)
 
 def run(port=PORT):
-    server_address = ("", port)
+    server_address = ("0.0.0.0", port)
     httpd = QuietHTTPServer(server_address, TelemetryHandler)
     print(f"🚀 AiVoiceTagger Command & Telemetry Server running on http://localhost:{port}")
     print(f"  • Telemetry API:    http://localhost:{port}/api/telemetry")
