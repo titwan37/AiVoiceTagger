@@ -1,13 +1,15 @@
 import { Component, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DecimalPipe } from '@angular/common';
 import { AqiBadgeComponent } from '../aqi-badge/aqi-badge.component';
 import { TelemetryStore } from '../../services/telemetry-store.service';
+import { WhisperModelVariant } from '../../models/telemetry.models';
 
 @Component({
   selector: 'app-global-banner',
   standalone: true,
   imports: [
     CommonModule,
+    DecimalPipe,
     AqiBadgeComponent
   ],
   templateUrl: './global-banner.component.html',
@@ -15,6 +17,29 @@ import { TelemetryStore } from '../../services/telemetry-store.service';
 })
 export class GlobalBannerComponent {
   store = inject(TelemetryStore);
+
+  readonly modelOptions: { id: WhisperModelVariant; label: string; desc: string }[] = [
+    { id: 'whisper-large-v3', label: 'Whisper Large v3 (FP16)', desc: 'Enterprise Forensic Accuracy • 14.2 GB VRAM' },
+    { id: 'whisper-medium-q8_0', label: 'Whisper Medium (Q8_0)', desc: 'High-Throughput Balanced • 7.8 GB VRAM' },
+    { id: 'whisper-small-q5_0', label: 'Whisper Small (Q5_0)', desc: 'Ultra-Fast Low-Latency • 3.2 GB VRAM' },
+  ];
+
+  onModelChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value as WhisperModelVariant;
+    this.store.hotSwapModel(value);
+  }
+
+  onTriggerFailover(): void {
+    if (this.store.isFailoverActive()) {
+      this.store.recoverFailover();
+    } else {
+      this.store.simulateFailover();
+    }
+  }
+
+  onOpenTwoPhaseCommit(): void {
+    this.store.openTwoPhaseCommitModal();
+  }
 
   generateMarkdownReport(): void {
     const metrics = this.store.globalMetrics();
@@ -39,62 +64,30 @@ export class GlobalBannerComponent {
     md += `| **Completed Records (${activeWin})** | ${winStat.completed} |\n`;
     md += `| **Audio Duration Processed** | ${this.store.audioDurationFormatted()} |\n`;
     md += `| **Real-Time Factor (RTF)** | ${this.store.realTimeFactor().toFixed(1)}x |\n`;
+    md += `| **Cluster Total VRAM Allocated** | ${(this.store.clusterTotalVramAllocatedMb() / 1024).toFixed(1)} GB |\n`;
+    md += `| **Total Active CUDA Streams** | ${this.store.clusterTotalCudaStreams()} |\n`;
+    md += `| **cuBLAS GEMM Throughput** | ${this.store.clusterGemmThroughputAudioSec()} audio/sec |\n`;
     md += `| **AQI Good / Degraded / Unusable** | ${winStat.good} / ${winStat.degraded} / ${winStat.unusable} |\n`;
     md += `| **Dead Letters / Failures** | ${metrics.dead_letter_count} / ${metrics.failure_count} |\n\n`;
 
     // 2. Worker Node Health
-    md += `## 📡 Worker Node Health\n\n`;
+    md += `## 📡 Worker Node Health & GPU Accelerators\n\n`;
     if (nodes.length === 0) {
       md += `*No worker nodes active.*\n\n`;
     } else {
-      md += `| Worker ID | Health Status | Current Stage | CPU % | RSS Memory (MB) | Active File | Lease Expiration |\n`;
-      md += `| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n`;
+      md += `| Worker ID | Health | VRAM (GB) | CUDA Streams | Temp | Current Stage |\n`;
+      md += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
       for (const n of nodes) {
-        md += `| \`${n.worker_id}\` | **${n.health}** | \`${n.current_stage}\` | ${n.resources.cpu_percent}% | ${n.resources.rss_memory_mb} MB | \`${n.active_file}\` | ${n.lease_expires_at ? new Date(n.lease_expires_at).toLocaleTimeString() : 'N/A'} |\n`;
+        const vramGb = n.gpu ? (n.gpu.vram_allocated_mb / 1024).toFixed(1) : 'N/A';
+        const streams = n.gpu ? n.gpu.cuda_streams_active : 'N/A';
+        const temp = n.gpu ? `${n.gpu.gpu_temp_celsius}°C` : 'N/A';
+        md += `| \`${n.worker_id}\` | **${n.health}** | ${vramGb} GB | ${streams} | ${temp} | \`${n.current_stage}\` |\n`;
       }
       md += `\n`;
-    }
-
-    // 3. Pipeline Funnel
-    md += `## 🔀 Pipeline Funnel Stage Distribution\n\n`;
-    const counts = metrics.pipeline_stage_counts;
-    md += `- **DISCOVERED**: ${counts.discovered || 0}\n`;
-    md += `- **QUEUED**: ${counts.queued || 0}\n`;
-    md += `- **DECODED**: ${counts.decoded || 0}\n`;
-    md += `- **TRIAGED_HIGH**: ${counts.triaged_high || 0}\n`;
-    md += `- **TRIAGED_LOW**: ${counts.triaged_low || 0}\n`;
-    md += `- **TRANSCRIBED**: ${counts.transcribed || 0}\n`;
-    md += `- **NLP_DONE**: ${counts.nlp_done || 0}\n`;
-    md += `- **EXPORTED**: ${counts.exported || 0}\n`;
-    md += `- **DONE**: ${counts.done || 0}\n`;
-    md += `- **DEAD_LETTER**: ${counts.dead_letter || 0}\n\n`;
-
-    // 4. Recent Dead Letters
-    md += `## 💀 Recent Dead Letters (Top 10)\n\n`;
-    if (deadLetters.length === 0) {
-      md += `*Zero dead letter failures recorded.*\n\n`;
-    } else {
-      md += `| Record ID | Stage Failed | Error Message | Timestamp |\n`;
-      md += `| :--- | :--- | :--- | :--- |\n`;
-      for (const d of deadLetters) {
-        md += `| \`${d.record_id}\` | \`${d.stage}\` | ${d.error.replace(/\n/g, ' ')} | ${d.created_at} |\n`;
-      }
-      md += `\n`;
-    }
-
-    // 5. Live Transcript Preview
-    md += `## 📝 Live Transcripts Sample (Last 5)\n\n`;
-    if (transcripts.length === 0) {
-      md += `*No completed transcripts available yet.*\n\n`;
-    } else {
-      for (const t of transcripts) {
-        md += `> **\`${t.name}\`** (${t.speech_count} speeches, ${t.is_degraded ? 'DEGRADED' : 'GOOD'}):  \n`;
-        md += `> "${t.story.replace(/\n/g, ' ')}"\n\n`;
-      }
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
-    this.downloadFile(md, `AiVoiceTagger_Report_${timestamp}.md`);
+    this.downloadFile(md, `AiVoiceTagger_Forensic_Report_${timestamp}.md`);
   }
 
   private downloadFile(content: string, filename: string): void {

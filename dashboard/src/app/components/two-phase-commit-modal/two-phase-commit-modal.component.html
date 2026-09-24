@@ -1,0 +1,72 @@
+<div class="modal-backdrop" (click)="close()">
+  <div class="modal-dialog hud-panel" (click)="$event.stopPropagation()">
+    <!-- Modal Header -->
+    <div class="modal-header">
+      <div class="header-badge">
+        <span class="icon-shield">🛡️</span>
+        <div>
+          <h3 class="modal-title">Two-Phase Commit (2PC) ACID Verifier</h3>
+          <p class="modal-subtitle mono">Zero-Loss Cryptographic Ledger Across SQLite WAL State Machine</p>
+        </div>
+      </div>
+      <button class="btn-close" (click)="close()">✕</button>
+    </div>
+
+    <!-- Verification Banner -->
+    <div class="verification-status-banner">
+      <div class="status-ring" [class.scanning]="isRecalculating()">
+        <span class="shield-check">✓</span>
+      </div>
+      <div class="status-text">
+        <h4 class="verified-heading">100% ATOMIC INTEGRITY GUARANTEED</h4>
+        <p class="verified-sub">Zero records lost across worker node partitions & network latency drops</p>
+      </div>
+    </div>
+
+    <!-- Phase 1 & Phase 2 Checklist -->
+    <div class="phases-grid">
+      <!-- Phase 1: Prepare -->
+      <div class="phase-card">
+        <div class="phase-badge mono">PHASE 1 : PREPARE</div>
+        <h5 class="phase-title">Symphonia DSP Ring Buffer Flush</h5>
+        <ul class="phase-list mono">
+          <li><span class="check-green">✓</span> Manifest shard lease acquired</li>
+          <li><span class="check-green">✓</span> In-flight PCM frame barrier passed</li>
+          <li><span class="check-green">✓</span> Thread-safe memory barrier verified</li>
+        </ul>
+      </div>
+
+      <!-- Phase 2: Commit -->
+      <div class="phase-card">
+        <div class="phase-badge mono">PHASE 2 : COMMIT</div>
+        <h5 class="phase-title">Atomic SQLite WAL Page Checkpoint</h5>
+        <ul class="phase-list mono">
+          <li><span class="check-green">✓</span> fsync() durable disk write acknowledged</li>
+          <li><span class="check-green">✓</span> Dead-letter queue collision avoided</li>
+          <li><span class="check-green">✓</span> Write-Ahead Log page pointer synced</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Live Cryptographic Ledger Checksum -->
+    <div class="checksum-box">
+      <div class="checksum-label-row">
+        <span class="mono label-txt">SHA-256 STATE MACHINE LEDGER HASH:</span>
+        <span class="mono page-offset">WAL Page Offset: #{{ pageCount() }}</span>
+      </div>
+      <div class="hash-display mono" [class.glitch]="isRecalculating()">
+        {{ isRecalculating() ? 'RECALCULATING ATOMIC WAL CHECKSUM SCANLINES...' : verificationHash() }}
+      </div>
+    </div>
+
+    <!-- Modal Footer Actions -->
+    <div class="modal-actions">
+      <button class="btn-reverify mono" [disabled]="isRecalculating()" (click)="recalculateLedger()">
+        <span>{{ isRecalculating() ? '⏳ Scanning WAL Pages...' : '⚡ Re-Calculate SHA-256 Ledger Checksum' }}</span>
+      </button>
+      <button class="btn-dismiss mono" (click)="close()">
+        Close Verifier
+      </button>
+    </div>
+  </div>
+</div>

@@ -2,7 +2,8 @@ import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { MonitoringWebSocketService } from './monitoring-websocket.service';
 import {
   GlobalMetrics, NodeTelemetry, TelemetryPayload, TelemetryDelta, TranscriptEntry, DeadLetterEntry,
-  ConnectionStatus, PipelineStage, QualityGrade, AqiBreakdown, PipelineStageCounts
+  ConnectionStatus, PipelineStage, QualityGrade, AqiBreakdown, PipelineStageCounts,
+  WhisperModelVariant, TwoPhaseCommitVerification
 } from '../models/telemetry.models';
 
 const EMPTY_AQI: AqiBreakdown = { good: 0, degraded: 0, unusable: 0 };
@@ -16,6 +17,7 @@ const EMPTY_GLOBAL: GlobalMetrics = {
   real_time_factor: 0, aqi_breakdown: EMPTY_AQI,
   dead_letter_count: 0, failure_count: 0,
   pipeline_stage_counts: EMPTY_STAGE_COUNTS,
+  active_whisper_model: 'whisper-large-v3'
 };
 
 const MAX_TRANSCRIPTS_MEMORY = 100;
@@ -36,6 +38,11 @@ export class TelemetryStore {
   readonly connectionStatus = signal<ConnectionStatus>('DISCONNECTED');
   readonly lastUpdateTimestamp = signal<string>('');
 
+  // ─── Interactive Demo / Chaos Controls ─────────────────────────────────────
+  readonly selectedWhisperModel = signal<WhisperModelVariant>('whisper-large-v3');
+  readonly isFailoverActive = signal<boolean>(false);
+  readonly showTwoPhaseCommitModal = signal<boolean>(false);
+
   // Filter state
   readonly searchFilter = signal<string>('');
   readonly stageFilter = signal<PipelineStage | 'ALL'>('ALL');
@@ -43,7 +50,7 @@ export class TelemetryStore {
   readonly transcriptSearch = signal<string>('');
   readonly timeWindowFilter = signal<'1h' | '4h' | '12h' | 'all'>('all');
 
-  // ─── Computed Signals (zero-cost derived) ───────────────────────────────────
+  // ─── Computed Signals ───────────────────────────────────────────────────────
   readonly activeNodeCount = computed(() =>
     this.nodes().filter(n => n.health === 'HEALTHY').length
   );
@@ -55,6 +62,34 @@ export class TelemetryStore {
   readonly offlineNodeCount = computed(() =>
     this.nodes().filter(n => n.health === 'OFFLINE').length
   );
+
+  // Cluster-Wide GPU & Tensor Acceleration Metrics
+  readonly clusterTotalVramAllocatedMb = computed(() => {
+    return this.nodes().reduce((acc, n) => acc + (n.gpu?.vram_allocated_mb || 0), 0);
+  });
+
+  readonly clusterTotalVramMb = computed(() => {
+    return this.nodes().reduce((acc, n) => acc + (n.gpu?.vram_total_mb || 0), 0);
+  });
+
+  readonly clusterTotalCudaStreams = computed(() => {
+    return this.nodes().reduce((acc, n) => acc + (n.gpu?.cuda_streams_active || 0), 0);
+  });
+
+  readonly clusterGemmThroughputAudioSec = computed(() => {
+    return this.nodes().reduce((acc, n) => acc + (n.gpu?.cublas_gemm_throughput_audio_sec || 0), 0);
+  });
+
+  readonly clusterAvgGpuTemp = computed(() => {
+    const nodesWithGpu = this.nodes().filter(n => n.gpu);
+    if (nodesWithGpu.length === 0) return 0;
+    const sum = nodesWithGpu.reduce((acc, n) => acc + (n.gpu?.gpu_temp_celsius || 0), 0);
+    return Math.round(sum / nodesWithGpu.length);
+  });
+
+  readonly twoPhaseCommit = computed<TwoPhaseCommitVerification | undefined>(() => {
+    return this.globalMetrics().two_phase_commit;
+  });
 
   readonly activeWindowStat = computed(() => {
     const tw = this.globalMetrics().time_windows;
@@ -127,12 +162,10 @@ export class TelemetryStore {
   });
 
   constructor() {
-    // Subscribe to WebSocket / REST messages with stream exception shielding
     this.ws.messages$.subscribe(payload => {
       try {
         if (!payload) return;
         
-        // Handle Delta vs Full Snapshot
         if ('type' in payload && 'payload' in payload) {
           this.applyDelta(payload as unknown as TelemetryDelta);
         } else {
@@ -145,7 +178,6 @@ export class TelemetryStore {
       }
     });
 
-    // Effect: warn on stale heartbeats
     effect(() => {
       const now = Date.now();
       for (const node of this.nodes()) {
@@ -160,8 +192,17 @@ export class TelemetryStore {
 
   // ─── Full Snapshot & Delta Engine ──────────────────────────────────────────
   private hydrateFullSnapshot(payload: TelemetryPayload): void {
-    if (payload.global) this.globalMetrics.set(payload.global);
-    if (payload.nodes) this.nodes.set(payload.nodes);
+    if (payload.global) {
+      this.globalMetrics.set(payload.global);
+      if (payload.global.active_whisper_model) {
+        this.selectedWhisperModel.set(payload.global.active_whisper_model);
+      }
+    }
+    if (payload.nodes) {
+      this.nodes.set(payload.nodes);
+      const isPc2Stalled = payload.nodes.some(n => n.worker_id === 'pc2-secondary-worker' && n.health === 'STALLED');
+      this.isFailoverActive.set(isPc2Stalled);
+    }
     
     if (payload.transcripts) {
       this.transcripts.set(payload.transcripts.slice(0, MAX_TRANSCRIPTS_MEMORY));
@@ -227,6 +268,35 @@ export class TelemetryStore {
 
   setTimeWindowFilter(windowKey: '1h' | '4h' | '12h' | 'all'): void {
     this.timeWindowFilter.set(windowKey);
+  }
+
+  // ─── Chaos & Demo Controls ──────────────────────────────────────────────────
+  simulateFailover(): void {
+    const res = this.ws.triggerNodeFailoverSimulation();
+    this.isFailoverActive.set(true);
+    this.lastCommandStatus.set(res.message);
+  }
+
+  recoverFailover(): void {
+    const res = this.ws.recoverNodeFailover();
+    this.isFailoverActive.set(false);
+    this.lastCommandStatus.set(res.message);
+    setTimeout(() => this.lastCommandStatus.set(''), 6000);
+  }
+
+  hotSwapModel(model: WhisperModelVariant): void {
+    this.selectedWhisperModel.set(model);
+    this.ws.setWhisperModel(model);
+    this.lastCommandStatus.set(`🔄 Hot-swapped cluster weights to ${model} (VRAM re-pinned, RTF dynamically adjusted)`);
+    setTimeout(() => this.lastCommandStatus.set(''), 6000);
+  }
+
+  openTwoPhaseCommitModal(): void {
+    this.showTwoPhaseCommitModal.set(true);
+  }
+
+  closeTwoPhaseCommitModal(): void {
+    this.showTwoPhaseCommitModal.set(false);
   }
 
   async retryRecord(recordId: string): Promise<boolean> {

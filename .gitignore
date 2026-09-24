@@ -5,12 +5,15 @@
 *.db
 *.db-wal
 *.db-shm
+*.db.bak*
 aivoicetagger_state.db
 
 #Dashboard
 /dashboard/.angular/.cache/
 /dashboard/.angular*
 /dashboard/node_modules/
+dashboard/.angular/cache/21.2.19/aivoicetagger-dashboard/vite/deps/_metadata.json
+dashboard/dist
 /node_modules/*
 /.angular/*
 /cache/*
@@ -52,4 +55,9 @@ ENV/
 .vscode/
 .DS_Store
 Thumbs.db
-dashboard/.angular/cache/21.2.19/aivoicetagger-dashboard/vite/deps/_metadata.json
+
+profiles/
+*.log
+*.txt
+*.csv
+*.exe

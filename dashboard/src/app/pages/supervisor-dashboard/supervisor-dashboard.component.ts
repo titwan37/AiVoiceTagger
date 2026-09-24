@@ -4,7 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { TelemetryStore } from '../../services/telemetry-store.service';
 import { GlobalBannerComponent } from '../../components/global-banner/global-banner.component';
 import { NodeStatusCardComponent } from '../../components/node-status-card/node-status-card.component';
-import { PipelineStageBarComponent } from '../../components/pipeline-stage-bar/pipeline-stage-bar.component';
+import { PipelineFunnelDagComponent } from '../../components/pipeline-funnel-dag/pipeline-funnel-dag.component';
+import { WaveformDiarizationComponent } from '../../components/waveform-diarization/waveform-diarization.component';
+import { TwoPhaseCommitModalComponent } from '../../components/two-phase-commit-modal/two-phase-commit-modal.component';
 import { DeadLetterExplorerComponent } from '../../components/dead-letter-explorer/dead-letter-explorer.component';
 import { InventoryOverviewComponent } from '../../components/inventory-overview/inventory-overview.component';
 import { PipelineStage, QualityGrade } from '../../models/telemetry.models';
@@ -18,7 +20,9 @@ import { PipelineStage, QualityGrade } from '../../models/telemetry.models';
     FormsModule,
     GlobalBannerComponent,
     NodeStatusCardComponent,
-    PipelineStageBarComponent,
+    PipelineFunnelDagComponent,
+    WaveformDiarizationComponent,
+    TwoPhaseCommitModalComponent,
     DeadLetterExplorerComponent,
     InventoryOverviewComponent,
   ],
@@ -28,7 +32,7 @@ import { PipelineStage, QualityGrade } from '../../models/telemetry.models';
 export class SupervisorDashboardComponent {
   store = inject(TelemetryStore);
 
-  activeTab = signal<'nodes' | 'dead_letters' | 'transcripts' | 'inventory'>('nodes');
+  activeTab = signal<'nodes' | 'pipeline_dag' | 'diarization' | 'dead_letters' | 'inventory'>('nodes');
 
   readonly stages: (PipelineStage | 'ALL')[] = [
     'ALL', 'DISCOVERED', 'QUEUED', 'DECODED', 'TRANSCRIBED', 'NLP_DONE', 'EXPORTED', 'DONE', 'DEAD_LETTER', 'FAILED',
@@ -36,7 +40,7 @@ export class SupervisorDashboardComponent {
 
   readonly aqiOptions: (QualityGrade | 'ALL')[] = ['ALL', 'GOOD', 'DEGRADED', 'UNUSABLE'];
 
-  setTab(tab: 'nodes' | 'dead_letters' | 'transcripts' | 'inventory'): void {
+  setTab(tab: 'nodes' | 'pipeline_dag' | 'diarization' | 'dead_letters' | 'inventory'): void {
     this.activeTab.set(tab);
   }
 
@@ -53,11 +57,6 @@ export class SupervisorDashboardComponent {
   onAqiChange(event: Event): void {
     const value = (event.target as HTMLSelectElement).value as QualityGrade | 'ALL';
     this.store.setAqiFilter(value);
-  }
-
-  onTranscriptSearch(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.store.setTranscriptSearch(value);
   }
 
   async onRetryDeadLetter(recordId: string): Promise<void> {

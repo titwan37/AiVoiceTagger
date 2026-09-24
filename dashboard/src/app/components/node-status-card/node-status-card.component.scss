@@ -1,22 +1,32 @@
 .node-card {
-  background: var(--surface-glass);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  padding: 20px;
+  background: var(--surface-panel);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.3s ease;
+  transition: box-shadow 0.25s ease, border-color 0.3s ease;
+  position: relative;
 
   &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 36px hsla(0, 0%, 0%, 0.25);
+    box-shadow: 0 12px 36px rgba(0, 242, 254, 0.18);
+    border-color: var(--hud-border-active);
   }
 
-  &.health-healthy { border-left: 3px solid hsl(152, 60%, 45%); }
-  &.health-stalled  { border-left: 3px solid hsl(38, 80%, 50%); animation: card-pulse-amber 2s infinite; }
-  &.health-offline  { border-left: 3px solid hsl(0, 60%, 50%); opacity: 0.6; }
+  &.health-healthy {
+    border-left: 4px solid var(--cuda-green);
+  }
+
+  &.health-stalled {
+    border-left: 4px solid var(--alert-crimson);
+    animation: card-alert-pulse 1.5s infinite;
+  }
+
+  &.health-offline {
+    border-left: 4px solid var(--text-muted);
+    opacity: 0.6;
+  }
 }
 
 .card-header {
@@ -31,37 +41,379 @@
   gap: 10px;
 
   .health-dot {
-    width: 10px; height: 10px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    animation: pulse 2s infinite;
   }
 
   .worker-id {
-    font-size: 1rem;
+    font-size: 0.95rem;
     font-weight: 700;
-    color: var(--text-primary);
-    letter-spacing: -0.01em;
+    color: var(--text-pure);
   }
 }
 
-.health-healthy .health-dot { background: hsl(152, 60%, 50%); }
-.health-stalled .health-dot { background: hsl(38, 80%, 55%); }
-.health-offline .health-dot { background: hsl(0, 60%, 55%); animation: none; }
-
-.cpu-affinity {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--surface-elevated);
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-family: 'JetBrains Mono', monospace;
+.health-healthy .health-dot {
+  background: var(--cuda-green);
+  box-shadow: 0 0 10px var(--cuda-green-glow);
+  animation: pulse-neon 2s infinite;
 }
 
+.health-stalled .health-dot {
+  background: var(--alert-crimson);
+  box-shadow: 0 0 12px var(--alert-crimson-glow);
+  animation: pulse-neon 0.6s infinite;
+}
+
+.health-offline .health-dot {
+  background: var(--text-muted);
+}
+
+.cpu-affinity {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-hud);
+  border: 1px solid var(--hud-border);
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+}
+
+// ─── GPU & CUDA Accelerators Hub ─────────────────────────────────────────────
+.gpu-accelerator-section {
+  background: #070b14;
+  border: 1px solid rgba(118, 185, 0, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gpu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  .gpu-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .nvidia-badge {
+    background: rgba(118, 185, 0, 0.15);
+    color: var(--cuda-green);
+    border: 1px solid rgba(118, 185, 0, 0.4);
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .gpu-name {
+    font-size: 0.72rem;
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .gpu-temp-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--cuda-green);
+    background: rgba(118, 185, 0, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+
+    &.temp-warm {
+      color: var(--vram-amber);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    &.temp-hot {
+      color: var(--alert-crimson);
+      background: rgba(255, 0, 85, 0.15);
+      border: 1px solid var(--alert-crimson);
+      animation: pulse-neon 0.8s infinite;
+    }
+  }
+}
+
+.vram-gauge-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  .vram-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+
+    .vram-title {
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .vram-numbers {
+      color: var(--text-primary);
+      strong { color: var(--neon-cyan); }
+    }
+  }
+
+  .vram-track {
+    height: 6px;
+    background: rgba(30, 41, 59, 0.8);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .vram-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00f2fe, #76b900);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+
+    &.vram-spike {
+      background: linear-gradient(90deg, #f59e0b, #ff0055);
+      box-shadow: 0 0 10px rgba(255, 0, 85, 0.8);
+    }
+  }
+}
+
+.tensor-throughput-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.68rem;
+
+  .stream-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cuda-green);
+      box-shadow: 0 0 6px var(--cuda-green-glow);
+    }
+  }
+
+  .gemm-stat {
+    .gemm-label { color: var(--text-muted); margin-right: 4px; }
+    .highlight-cuda {
+      color: var(--cuda-green);
+      font-weight: 700;
+      text-shadow: 0 0 8px var(--cuda-green-glow);
+    }
+  }
+}
+
+// ─── 32-Layer Pinned Weights Visualizer ──────────────────────────────────────
+.pinned-weights-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: rgba(11, 15, 25, 0.6);
+  padding: 8px;
+  border-radius: 4px;
+
+  .weights-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.58rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+
+    .weights-count {
+      color: var(--neon-cyan);
+      font-weight: 700;
+    }
+  }
+
+  .weights-grid {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 3px;
+  }
+
+  .weight-block {
+    height: 8px;
+    border-radius: 1.5px;
+    transition: all 0.2s ease;
+
+    &.pinned {
+      background: #76b900;
+      box-shadow: 0 0 4px rgba(118, 185, 0, 0.6);
+    }
+
+    &.unpinned {
+      background: #dc2626;
+      opacity: 0.35;
+    }
+
+    &:hover {
+      filter: brightness(1.5);
+      outline: 1px solid var(--neon-cyan);
+      z-index: 2;
+    }
+  }
+}
+
+// ─── Stereo DSP Audio VU Meters & FFT Spectrum Visualizer ─────────────────────
+.vu-meters-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(7, 11, 20, 0.85);
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.5);
+
+  .vu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.58rem;
+    letter-spacing: 0.04em;
+
+    .vu-title {
+      color: var(--neon-cyan);
+      font-weight: 700;
+      text-shadow: 0 0 6px var(--neon-cyan-glow);
+    }
+
+    .vu-db-readouts {
+      display: flex;
+      gap: 6px;
+
+      .db-pill {
+        font-size: 0.6rem;
+        font-weight: 700;
+        color: var(--cuda-green);
+        background: rgba(118, 185, 0, 0.12);
+        padding: 1px 5px;
+        border-radius: 3px;
+        border: 1px solid rgba(118, 185, 0, 0.3);
+
+        &.clip {
+          color: #ff0055;
+          background: rgba(255, 0, 85, 0.2);
+          border-color: #ff0055;
+          animation: pulse-neon 0.5s infinite;
+        }
+      }
+    }
+  }
+
+  .vu-stereo-channels {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    .channel-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+
+      .ch-label {
+        font-size: 0.62rem;
+        font-weight: 800;
+        color: var(--text-muted);
+        width: 10px;
+      }
+
+      .led-bar {
+        display: flex;
+        gap: 2px;
+        flex: 1;
+        background: rgba(15, 23, 42, 0.9);
+        padding: 3px;
+        border-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+
+        .led-seg {
+          flex: 1;
+          height: 7px;
+          border-radius: 1px;
+          background: rgba(30, 41, 59, 0.6);
+          transition: background-color 0.05s ease, box-shadow 0.05s ease;
+
+          &.green.active {
+            background: #76b900;
+            box-shadow: 0 0 4px rgba(118, 185, 0, 0.8);
+          }
+
+          &.yellow.active {
+            background: #f59e0b;
+            box-shadow: 0 0 5px rgba(245, 158, 11, 0.9);
+          }
+
+          &.red.active {
+            background: #ff0055;
+            box-shadow: 0 0 6px rgba(255, 0, 85, 1);
+          }
+
+          &.peak-hold {
+            background: #ffffff !important;
+            box-shadow: 0 0 8px #ffffff !important;
+          }
+        }
+      }
+    }
+  }
+
+  .fft-spectrum-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 3px;
+    height: 38px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+
+    .fft-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      flex: 1;
+      height: 100%;
+
+      .fft-bar-track {
+        flex: 1;
+        width: 100%;
+        background: rgba(15, 23, 42, 0.7);
+        border-radius: 2px;
+        display: flex;
+        align-items: flex-end;
+        overflow: hidden;
+      }
+
+      .fft-bar-fill {
+        width: 100%;
+        background: linear-gradient(0deg, #00f2fe 0%, #76b900 70%, #a855f7 100%);
+        border-radius: 2px;
+        transition: height 0.08s ease-out;
+      }
+
+      .fft-label {
+        font-size: 0.52rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
+// ─── Work, Stage & Context ───────────────────────────────────────────────────
 .active-work {
   .file-name {
     font-size: 0.78rem;
-    color: var(--text-secondary);
+    color: var(--text-pure);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -75,14 +427,45 @@
   }
 
   .stage-badge {
-    font-size: 0.68rem;
+    font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 3px 10px;
-    border-radius: 6px;
-    background: hsla(230, 50%, 55%, 0.15);
-    color: hsl(230, 55%, 65%);
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(0, 242, 254, 0.1);
+    color: var(--neon-cyan);
+    border: 1px solid rgba(0, 242, 254, 0.25);
+  }
+}
+
+.mission-block {
+  background: var(--surface-hud);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.75rem;
+
+  .mission-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+
+    .mission-goal {
+      font-weight: 700;
+      color: var(--tensor-purple);
+    }
+
+    .expected-output {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+    }
+  }
+
+  .goal-desc {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    line-height: 1.35;
+    margin: 0;
   }
 }
 
@@ -90,93 +473,35 @@
   .progress-header {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 6px;
-
-    .progress-label {
-      font-size: 0.68rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
 
     .progress-value {
-      font-size: 0.75rem;
+      color: var(--text-pure);
       font-weight: 700;
-      font-family: 'JetBrains Mono', monospace;
-      color: var(--text-primary);
     }
   }
 
   .progress-track {
-    height: 6px;
-    background: var(--surface-elevated);
+    height: 5px;
+    background: rgba(30, 41, 59, 0.8);
     border-radius: 3px;
     overflow: hidden;
   }
 
   .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, hsl(210, 65%, 50%), hsl(260, 55%, 55%));
-    background-size: 200% 100%;
+    background: linear-gradient(90deg, #0284c7, #38bdf8);
     border-radius: 3px;
-    transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-}
-
-.health-healthy .progress-fill {
-  background: repeating-linear-gradient(
-    45deg,
-    hsl(210, 65%, 50%),
-    hsl(210, 65%, 50%) 10px,
-    hsl(260, 55%, 55%) 10px,
-    hsl(260, 55%, 55%) 20px
-  );
-  background-size: 28px 28px;
-  animation: move-stripes 1s linear infinite;
-}
-
-@keyframes move-stripes {
-  0% { background-position: 0 0; }
-  100% { background-position: 28px 0; }
-}
-
-.info-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-
-  .info-item {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-
-    .info-label {
-      font-size: 0.62rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-    }
-
-    .info-value {
-      font-size: 0.78rem;
-      font-weight: 600;
-      color: var(--text-secondary);
-
-      &.mono { font-family: 'JetBrains Mono', monospace; }
-      &.sidecar-active { color: hsl(152, 60%, 50%); }
-      &.sidecar-restarting { color: hsl(38, 80%, 55%); }
-      &.sidecar-paused { color: hsl(25, 90%, 55%); }
-      &.sidecar-offline { color: hsl(0, 60%, 55%); }
-    }
+    transition: width 0.4s ease;
   }
 }
 
 .resources-row {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 
   .resource {
     display: grid;
@@ -187,31 +512,27 @@
     .res-label {
       font-size: 0.62rem;
       font-weight: 700;
-      text-transform: uppercase;
       color: var(--text-muted);
     }
 
     .res-bar-track {
-      height: 5px;
-      background: var(--surface-elevated);
-      border-radius: 3px;
+      height: 4px;
+      background: rgba(30, 41, 59, 0.8);
+      border-radius: 2px;
       overflow: hidden;
     }
 
     .res-bar-fill {
       height: 100%;
-      border-radius: 3px;
-      transition: width 0.4s ease;
+      border-radius: 2px;
 
-      &.cpu-fill { background: hsl(210, 65%, 55%); }
-      &.ram-fill { background: hsl(280, 50%, 55%); }
-      &.high { background: hsl(0, 65%, 55%); }
+      &.cpu-fill { background: #0284c7; }
+      &.ram-fill { background: #8b5cf6; }
+      &.high { background: #ff0055; }
     }
 
     .res-value {
       font-size: 0.68rem;
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 600;
       color: var(--text-secondary);
       text-align: right;
     }
@@ -222,21 +543,17 @@
   display: flex;
   justify-content: space-between;
   padding-top: 10px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--hud-border);
+  font-size: 0.68rem;
+  color: var(--text-muted);
 
-  .footer-item {
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    &.mono { font-family: 'JetBrains Mono', monospace; }
+  .footer-done {
+    color: var(--cuda-green);
+    font-weight: 600;
   }
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
-}
-
-@keyframes card-pulse-amber {
-  0%, 100% { box-shadow: 0 0 0 0 hsla(38, 80%, 50%, 0); }
-  50% { box-shadow: 0 0 12px 3px hsla(38, 80%, 50%, 0.12); }
+@keyframes card-alert-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); }
+  50% { box-shadow: 0 0 20px 4px rgba(255, 0, 85, 0.3); }
 }

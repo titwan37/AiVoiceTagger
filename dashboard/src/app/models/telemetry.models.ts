@@ -1,6 +1,6 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// AiVoiceTagger Supervisor Dashboard — Core Domain Models
-// Mirrors Rust-side models.rs enums and structs for telemetry payloads.
+// AiVoiceTagger Supervisor Dashboard — Core Domain & Hardware Models
+// Mirrors Rust-side engine enums, CUDA telemetry, and acoustic forensics.
 // ──────────────────────────────────────────────────────────────────────────────
 
 /** Pipeline state machine stages (mirrors Rust RecordState enum). */
@@ -29,6 +29,64 @@ export type SidecarStatus = 'ACTIVE' | 'RESTARTING' | 'BACKPRESSURE_PAUSED' | 'O
 
 /** WebSocket connection state. */
 export type ConnectionStatus = 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
+
+/** Available Whisper model weights for live hot-swap. */
+export type WhisperModelVariant =
+  | 'whisper-small-q5_0'
+  | 'whisper-medium-q8_0'
+  | 'whisper-large-v3';
+
+/** GPU & CUDA Tensor Accelerators hardware metrics for high-density computing. */
+export interface GpuTelemetry {
+  device_name: string;
+  vram_allocated_mb: number;
+  vram_total_mb: number;
+  vram_percent: number;
+  cuda_streams_active: number;
+  cublas_gemm_throughput_audio_sec: number;
+  cublas_gemm_throughput_items_sec: number;
+  gpu_temp_celsius: number;
+  gpu_power_watts: number;
+  tensor_cores_active: number;
+  pinned_model_layers: boolean[]; // 32-layer pinned VRAM residence
+}
+
+/** Forensic Acoustic Biomarkers extracted via DSP & sidecar. */
+export interface AcousticBiomarkers {
+  fundamental_pitch_f0: number; // Hz (e.g., 142.5 Hz)
+  vocal_strain_index: number;   // 0.00 to 1.00 (tension & pitch fluctuation)
+  speech_tempo_wpm: number;     // Words per minute
+  snr_db: number;               // Signal-to-noise ratio in decibels
+  vad_confidence: number;       // Silero VAD speech probability
+}
+
+/** 192-dim D-Vector centroid cluster representation for speaker diarization. */
+export interface DiarizationCluster {
+  speaker_id: string;
+  speaker_label: string;
+  color: string;
+  centroid_norm: number;
+  confidence: number;
+  turn_count: number;
+}
+
+/** Silero VAD frame window for silence-stripping visualization. */
+export interface VadWindow {
+  start_sec: number;
+  end_sec: number;
+  is_speech: boolean;
+  speaker: string;
+}
+
+/** 2PC (Two-Phase Commit) SQLite WAL cryptographic ledger verification. */
+export interface TwoPhaseCommitVerification {
+  sha256_checksum: string;
+  wal_page_offset: number;
+  commit_timestamp: string;
+  verified: boolean;
+  total_records_checked: number;
+  zero_data_loss_guaranteed: boolean;
+}
 
 /** AQI count breakdown for global metrics. */
 export interface AqiBreakdown {
@@ -76,7 +134,7 @@ export interface ResourceMetrics {
   ipc_messages_per_sec: number;
 }
 
-/** Per-worker node telemetry snapshot. */
+/** Per-worker node telemetry snapshot including GPU and compute stream state. */
 export interface NodeTelemetry {
   worker_id: string;
   cpu_affinity: string;
@@ -87,6 +145,7 @@ export interface NodeTelemetry {
   loaded_model: string;
   sidecar_status: SidecarStatus;
   resources: ResourceMetrics;
+  gpu?: GpuTelemetry;
   lease_expires_at: string;
   last_heartbeat: string;
   records_processed: number;
@@ -123,6 +182,8 @@ export interface GlobalMetrics {
   pipeline_stage_counts: PipelineStageCounts;
   time_windows?: TimeWindowStats;
   evidence_stats?: EvidenceStats;
+  active_whisper_model?: WhisperModelVariant;
+  two_phase_commit?: TwoPhaseCommitVerification;
 }
 
 export interface TranscriptEntry {
@@ -136,6 +197,9 @@ export interface TranscriptEntry {
   state: string;
   updated_at: string;
   verbatim?: Record<string, number>;
+  biomarkers?: AcousticBiomarkers;
+  diarization_clusters?: DiarizationCluster[];
+  vad_windows?: VadWindow[];
 }
 
 export interface DeadLetterEntry {

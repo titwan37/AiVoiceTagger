@@ -1,0 +1,172 @@
+<div class="pipeline-dag-container hud-panel">
+  <!-- DAG Header -->
+  <div class="dag-header">
+    <div class="header-left">
+      <div class="pulse-indicator" [class.paused]="isPaused()" [class.alert]="isFailover()"></div>
+      <h3 class="dag-title">
+        <span class="highlight-cyan">Funnel Topology</span> & 2PC ACID Pipeline
+      </h3>
+      <span class="protocol-badge mono">3-LAYER COLLISION DEFENSE</span>
+    </div>
+    <div class="header-right">
+      <span class="status-summary mono">
+        State: <strong [class.text-green]="!isPaused() && !isFailover()" [class.text-amber]="isPaused()" [class.text-red]="isFailover()">
+          {{ isFailover() ? 'CHAOS FAILOVER DETECTED' : (isPaused() ? 'PAUSED' : 'OPTIMAL 60+ FPS') }}
+        </strong>
+      </span>
+    </div>
+  </div>
+
+  <!-- SVG Interactive Topology Map -->
+  <div class="svg-viewport">
+    <svg class="dag-svg" viewBox="0 0 1000 240" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <!-- Gradients -->
+        <linearGradient id="cyanLineGrad" gradientUnits="userSpaceOnUse" x1="0" y1="100" x2="1000" y2="100">
+          <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#76b900" stop-opacity="0.9"/>
+        </linearGradient>
+
+        <linearGradient id="tensorLineGrad" gradientUnits="userSpaceOnUse" x1="0" y1="100" x2="1000" y2="100">
+          <stop offset="0%" stop-color="#76b900" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#a855f7" stop-opacity="0.9"/>
+        </linearGradient>
+
+        <linearGradient id="commitLineGrad" gradientUnits="userSpaceOnUse" x1="0" y1="100" x2="1000" y2="100">
+          <stop offset="0%" stop-color="#a855f7" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#ec4899" stop-opacity="0.9"/>
+        </linearGradient>
+
+        <linearGradient id="alertLineGrad" gradientUnits="userSpaceOnUse" x1="600" y1="135" x2="790" y2="190">
+          <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#ff0055" stop-opacity="0.9"/>
+        </linearGradient>
+
+        <!-- Node Glow Filters -->
+        <filter id="cyanGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+
+        <filter id="alertGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="6" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+
+      <!-- Connecting Beams (Background Track & Active Flow Beam) -->
+      <!-- Link 1: NAS -> Manifest -->
+      <path class="dag-path-bg" d="M 170 100 L 240 100" stroke="url(#cyanLineGrad)" />
+      <path class="dag-path stream-active" d="M 170 100 L 240 100" stroke="url(#cyanLineGrad)" />
+
+      <!-- Link 2: Manifest -> Symphonia -->
+      <path class="dag-path-bg" d="M 380 100 L 450 100" stroke="url(#cyanLineGrad)" />
+      <path class="dag-path stream-active" d="M 380 100 L 450 100" stroke="url(#cyanLineGrad)" />
+
+      <!-- Link 3: Symphonia -> CUDA -->
+      <path class="dag-path-bg" d="M 600 100 L 680 100" stroke="url(#tensorLineGrad)" />
+      <path class="dag-path stream-active" d="M 600 100 L 680 100" stroke="url(#tensorLineGrad)" />
+
+      <!-- Link 4: CUDA -> 2PC Commit -->
+      <path class="dag-path-bg" d="M 840 100 L 900 100" stroke="url(#commitLineGrad)" />
+      <path class="dag-path stream-active" d="M 840 100 L 900 100" stroke="url(#commitLineGrad)" />
+
+      <!-- Animated Data Packet Pulses -->
+      @if (!isPaused()) {
+        <circle class="packet-pulse" r="4" fill="#00f2fe">
+          <animateMotion path="M 170 100 L 240 100" dur="1.4s" repeatCount="indefinite" />
+        </circle>
+        <circle class="packet-pulse" r="4" fill="#76b900">
+          <animateMotion path="M 380 100 L 450 100" dur="1.2s" repeatCount="indefinite" />
+        </circle>
+        <circle class="packet-pulse" r="5" fill="#a855f7">
+          <animateMotion path="M 600 100 L 680 100" dur="1.0s" repeatCount="indefinite" />
+        </circle>
+        <circle class="packet-pulse" r="4" fill="#ec4899">
+          <animateMotion path="M 840 100 L 900 100" dur="1.1s" repeatCount="indefinite" />
+        </circle>
+      }
+
+      <!-- Failover & Quarantine DLQ Branch -->
+      @if (isFailover() || (counts().dead_letter || 0) > 0) {
+        <path class="dag-path-bg" d="M 760 135 C 760 175, 660 185, 600 185" stroke="url(#alertLineGrad)" />
+        <path class="dag-path stream-alert" d="M 760 135 C 760 175, 660 185, 600 185" stroke="url(#alertLineGrad)" />
+        @if (!isPaused()) {
+          <circle class="packet-pulse-alert" r="5" fill="#ff0055">
+            <animateMotion path="M 760 135 C 760 175, 660 185, 600 185" dur="0.9s" repeatCount="indefinite" />
+          </circle>
+        }
+      }
+
+      <!-- NODE 1: NAS INGESTION -->
+      <g class="dag-node-group" [class.selected]="selectedNodeId() === 'nas'" (click)="selectNode('nas')" transform="translate(40, 65)">
+        <rect class="node-box" width="130" height="70" rx="8" />
+        <circle class="node-dot dot-cyan" cx="18" cy="22" r="5" />
+        <text class="node-layer" x="30" y="25">STORAGE</text>
+        <text class="node-title mono" x="15" y="44">\\SyNAS\Records</text>
+        <text class="node-counter mono" x="15" y="58">{{ counts().discovered || 0 }} discovered</text>
+      </g>
+
+      <!-- NODE 2: MANIFEST PARTITION -->
+      <g class="dag-node-group" [class.selected]="selectedNodeId() === 'manifest'" (click)="selectNode('manifest')" transform="translate(240, 65)">
+        <rect class="node-box" width="140" height="70" rx="8" />
+        <circle class="node-dot dot-cyan" cx="18" cy="22" r="5" />
+        <text class="node-layer" x="30" y="25">COLLISION DEFENSE 1</text>
+        <text class="node-title mono" x="15" y="44">Manifest Partition</text>
+        <text class="node-counter mono" x="15" y="58">{{ counts().queued || 0 }} queued</text>
+      </g>
+
+      <!-- NODE 3: LOCK-FREE SYMPHONIA DSP -->
+      <g class="dag-node-group" [class.selected]="selectedNodeId() === 'symphonia'" (click)="selectNode('symphonia')" transform="translate(450, 65)">
+        <rect class="node-box" width="150" height="70" rx="8" />
+        <circle class="node-dot dot-cuda" cx="18" cy="22" r="5" />
+        <text class="node-layer" x="30" y="25">COLLISION DEFENSE 2</text>
+        <text class="node-title mono" x="15" y="44">Symphonia DSP</text>
+        <text class="node-counter mono" x="15" y="58">{{ (counts().decoded || 0) + (counts().triaged_high || 0) }} PCM frames</text>
+      </g>
+
+      <!-- NODE 4: CUDA TENSOR CORE BATCHING -->
+      <g class="dag-node-group" [class.selected]="selectedNodeId() === 'cuda'" [class.node-alert]="isFailover()" (click)="selectNode('cuda')" transform="translate(680, 65)">
+        <rect class="node-box" width="160" height="70" rx="8" [attr.filter]="isFailover() ? 'url(#alertGlow)' : null" />
+        <circle class="node-dot" [class.dot-alert]="isFailover()" [class.dot-tensor]="!isFailover()" cx="18" cy="22" r="5" />
+        <text class="node-layer" x="30" y="25">{{ isFailover() ? 'VRAM SPIKE ALERT' : 'COLLISION DEFENSE 3' }}</text>
+        <text class="node-title mono" x="15" y="44">CUDA Tensor Cores</text>
+        <text class="node-counter mono" x="15" y="58">{{ counts().transcribed || 0 }} batched FP16</text>
+      </g>
+
+      <!-- NODE 5: 2PC SQLITE WAL COMMIT -->
+      <g class="dag-node-group" [class.selected]="selectedNodeId() === 'twopc'" (click)="selectNode('twopc')" transform="translate(900, 65)">
+        <rect class="node-box" width="90" height="70" rx="8" />
+        <circle class="node-dot dot-cuda" cx="18" cy="22" r="5" />
+        <text class="node-layer" x="30" y="25">2PC ACID</text>
+        <text class="node-title mono" x="15" y="44">WAL</text>
+        <text class="node-counter mono" x="15" y="58">{{ counts().done || 0 }}</text>
+      </g>
+
+      <!-- DLQ Node (Visible when failover or DLQ active) -->
+      @if (isFailover() || (counts().dead_letter || 0) > 0) {
+        <g class="dag-node-group dlq-node" [class.selected]="selectedNodeId() === 'dead_letter'" (click)="selectNode('dead_letter')" transform="translate(480, 165)">
+          <rect class="node-box-dlq" width="180" height="50" rx="6" filter="url(#alertGlow)" />
+          <circle class="node-dot dot-alert" cx="18" cy="20" r="5" />
+          <text class="node-layer-alert" x="30" y="23">WATCHDOG QUARANTINE ({{ counts().dead_letter || 0 }})</text>
+          <text class="node-title-alert mono" x="15" y="40">DLQ (Zero-Zombie Auto-Recycle)</text>
+        </g>
+      }
+    </svg>
+  </div>
+
+  <!-- Interactive DAG Node Drilldown HUD -->
+  @if (selectedNode()) {
+    <div class="node-drilldown-hud">
+      <div class="drilldown-badge">
+        <span class="badge-layer mono">{{ selectedNode().layer }}</span>
+        <h4 class="drilldown-title">{{ selectedNode().title }}</h4>
+      </div>
+      <p class="drilldown-desc">{{ selectedNode().detail }}</p>
+      <div class="drilldown-stats mono">
+        <span class="stat-pill">Active Buffer: <strong>{{ selectedNode().count }}</strong></span>
+        <span class="stat-pill">Subsystem Status: <strong>{{ selectedNode().status }}</strong></span>
+      </div>
+    </div>
+  }
+</div>

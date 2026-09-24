@@ -1,49 +1,42 @@
-<section class="global-banner">
-  <div class="banner-header">
-    <div class="banner-title">
-      <span class="title-icon">🎙️</span>
-      <h1>AiVoiceTagger Supervisor</h1>
-    </div>
-    <div class="banner-actions" style="display: flex; gap: 12px; align-items: center;">
-      <!-- Time Window Selector -->
-      <div class="time-window-nav" style="display: flex; align-items: center; gap: 6px; background: #13131e; padding: 4px 8px; border: 1px solid #2b2b40; border-radius: 6px;">
-        <span style="font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; margin-right: 4px;">Window:</span>
-        <button 
-          (click)="store.setTimeWindowFilter('1h')"
-          [style.background]="store.timeWindowFilter() === '1h' ? '#2563eb' : 'transparent'"
-          [style.color]="store.timeWindowFilter() === '1h' ? 'white' : '#9ca3af'"
-          style="border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
-          ⚡ 1h
-        </button>
-        <button 
-          (click)="store.setTimeWindowFilter('4h')"
-          [style.background]="store.timeWindowFilter() === '4h' ? '#2563eb' : 'transparent'"
-          [style.color]="store.timeWindowFilter() === '4h' ? 'white' : '#9ca3af'"
-          style="border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
-          🕒 4h
-        </button>
-        <button 
-          (click)="store.setTimeWindowFilter('12h')"
-          [style.background]="store.timeWindowFilter() === '12h' ? '#2563eb' : 'transparent'"
-          [style.color]="store.timeWindowFilter() === '12h' ? 'white' : '#9ca3af'"
-          style="border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
-          🌙 12h
-        </button>
-        <button 
-          (click)="store.setTimeWindowFilter('all')"
-          [style.background]="store.timeWindowFilter() === 'all' ? '#2563eb' : 'transparent'"
-          [style.color]="store.timeWindowFilter() === 'all' ? 'white' : '#9ca3af'"
-          style="border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
-          🌐 All
-        </button>
+<section class="global-banner hud-panel">
+  <!-- Top Command Header -->
+  <div class="banner-top-bar">
+    <div class="brand-title">
+      <div class="logo-radar">
+        <span class="radar-sweep-beam"></span>
+        <span class="logo-icon">⚡</span>
       </div>
+      <div>
+        <div class="title-row">
+          <h1 class="system-title">AiVoiceTagger</h1>
+          <span class="version-tag mono">SUPERVISOR COMMAND CENTER v2.4</span>
+        </div>
+        <p class="system-subtitle mono">Multi-Node GPU Cluster • CUDA Tensor Core Acceleration • Forensic Diarization</p>
+      </div>
+    </div>
 
-      <a href="http://localhost:9090/api/export/csv" target="_blank" class="export-btn" style="background: #2563eb; color: white; padding: 6px 14px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s ease;">
-        <span>📥</span> Export Live CSV
-      </a>
-      <button (click)="generateMarkdownReport()" class="export-btn" style="background: #4f46e5; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: background 0.2s ease;">
-        <span>📄</span> Generate MD Report
-      </button>
+    <!-- Cluster Hardware Telemetry Summary -->
+    <div class="cluster-hardware-bar mono">
+      <div class="hw-item">
+        <span class="hw-label">CLUSTER VRAM</span>
+        <span class="hw-val highlight-cyan">{{ (store.clusterTotalVramAllocatedMb() / 1024).toFixed(1) }} <small>GB</small></span>
+      </div>
+      <div class="hw-divider"></div>
+      <div class="hw-item">
+        <span class="hw-label">CUDA STREAMS</span>
+        <span class="hw-val highlight-cuda">{{ store.clusterTotalCudaStreams() }} <small>ACTIVE</small></span>
+      </div>
+      <div class="hw-divider"></div>
+      <div class="hw-item">
+        <span class="hw-label">GEMM BATCH</span>
+        <span class="hw-val highlight-tensor">{{ store.clusterGemmThroughputAudioSec() }} <small>audio/s</small></span>
+      </div>
+      <div class="hw-divider"></div>
+      <div class="hw-item">
+        <span class="hw-label">AVG GPU TEMP</span>
+        <span class="hw-val">{{ store.clusterAvgGpuTemp() }}°C</span>
+      </div>
+      <div class="hw-divider"></div>
       <div class="connection-indicator" [class.connected]="store.connectionStatus() === 'CONNECTED'"
            [class.reconnecting]="store.connectionStatus() === 'RECONNECTING'">
         <span class="dot"></span>
@@ -52,41 +45,121 @@
     </div>
   </div>
 
+  <!-- Interactive Action & Chaos Controls Strip -->
+  <div class="interactive-controls-bar">
+    <!-- Left: Model Hot-Swap & Chaos Triggers -->
+    <div class="controls-left">
+      <!-- Model Hot-Swap Selector -->
+      <div class="control-group">
+        <label class="control-label mono" for="model-hotswap">MODEL HOT-SWAP</label>
+        <select
+          id="model-hotswap"
+          class="control-select mono"
+          [value]="store.selectedWhisperModel()"
+          (change)="onModelChange($event)">
+          @for (opt of modelOptions; track opt.id) {
+            <option [value]="opt.id">{{ opt.label }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Chaos Simulation Trigger -->
+      <button
+        type="button"
+        class="btn-chaos mono"
+        [class.active-failover]="store.isFailoverActive()"
+        (click)="onTriggerFailover()">
+        <span class="btn-icon">{{ store.isFailoverActive() ? '🛡️' : '⚠️' }}</span>
+        <span>{{ store.isFailoverActive() ? 'Recover PC2 / Watchdog Recycle' : 'Simulate PC2 Failover / VRAM Spike' }}</span>
+      </button>
+
+      <!-- One-Click 2PC Verification Modal Trigger -->
+      <button
+        type="button"
+        class="btn-twopc mono"
+        (click)="onOpenTwoPhaseCommit()">
+        <span class="btn-icon">🔒</span>
+        <span>One-Click 2PC Verification</span>
+      </button>
+    </div>
+
+    <!-- Right: Time Window Filter & Reports -->
+    <div class="controls-right">
+      <div class="time-window-nav mono">
+        <span class="window-label">WINDOW:</span>
+        <button
+          type="button"
+          class="window-btn"
+          [class.active]="store.timeWindowFilter() === '1h'"
+          (click)="store.setTimeWindowFilter('1h')">
+          ⚡ 1h
+        </button>
+        <button
+          type="button"
+          class="window-btn"
+          [class.active]="store.timeWindowFilter() === '4h'"
+          (click)="store.setTimeWindowFilter('4h')">
+          🕒 4h
+        </button>
+        <button
+          type="button"
+          class="window-btn"
+          [class.active]="store.timeWindowFilter() === '12h'"
+          (click)="store.setTimeWindowFilter('12h')">
+          🌙 12h
+        </button>
+        <button
+          type="button"
+          class="window-btn"
+          [class.active]="store.timeWindowFilter() === 'all'"
+          (click)="store.setTimeWindowFilter('all')">
+          🌐 All
+        </button>
+      </div>
+
+      <button type="button" (click)="generateMarkdownReport()" class="btn-report mono">
+        <span>📄</span> Generate Audit MD
+      </button>
+    </div>
+  </div>
+
+  <!-- Primary Operations Metrics Grid -->
   <div class="metrics-grid">
-    <!-- Total Files -->
+    <!-- Discovered -->
     <div class="metric-card">
-      <span class="metric-label">Discovered</span>
-      <span class="metric-value">{{ store.globalMetrics().total_discovered | number }}</span>
+      <span class="metric-label mono">Discovered</span>
+      <span class="metric-value mono">{{ store.globalMetrics().total_discovered | number }}</span>
     </div>
 
+    <!-- Queued -->
     <div class="metric-card">
-      <span class="metric-label">Queued</span>
-      <span class="metric-value">{{ store.globalMetrics().total_queued | number }}</span>
+      <span class="metric-label mono">Queued Buffer</span>
+      <span class="metric-value mono highlight-cyan">{{ store.globalMetrics().total_queued | number }}</span>
     </div>
 
+    <!-- Completed -->
     <div class="metric-card">
-      <span class="metric-label">Completed ({{ store.timeWindowFilter() | uppercase }})</span>
-      <span class="metric-value accent-green">{{ store.activeWindowStat().completed | number }}</span>
+      <span class="metric-label mono">Completed ({{ store.timeWindowFilter() | uppercase }})</span>
+      <span class="metric-value mono highlight-cuda">{{ store.activeWindowStat().completed | number }}</span>
     </div>
 
     <!-- Audio Duration -->
     <div class="metric-card">
-      <span class="metric-label">Audio Processed</span>
+      <span class="metric-label mono">Audio Processed</span>
       <span class="metric-value mono">{{ store.audioDurationFormatted() }}</span>
     </div>
 
-    <!-- RTF -->
+    <!-- Real-Time Factor (RTF) -->
     <div class="metric-card">
-      <span class="metric-label">Real-Time Factor</span>
-      <span class="metric-value mono" [class.rtf-fast]="store.realTimeFactor() > 5"
-            [class.rtf-slow]="store.realTimeFactor() < 1">
+      <span class="metric-label mono">Real-Time Factor (RTF)</span>
+      <span class="metric-value mono" [class.rtf-fast]="store.realTimeFactor() > 10" [class.rtf-nominal]="store.realTimeFactor() >= 5 && store.realTimeFactor() <= 10">
         {{ store.realTimeFactor() | number:'1.1-1' }}x
       </span>
     </div>
 
-    <!-- AQI Breakdown -->
+    <!-- Audio Quality Index (AQI) -->
     <div class="metric-card aqi-card">
-      <span class="metric-label">Audio Quality Index</span>
+      <span class="metric-label mono">Audio Quality Index</span>
       <div class="aqi-badges">
         <app-aqi-badge grade="GOOD" [count]="store.activeWindowStat().good" />
         <app-aqi-badge grade="DEGRADED" [count]="store.activeWindowStat().degraded" />
@@ -96,33 +169,30 @@
 
     <!-- Dead Letter / Failures -->
     <div class="metric-card" [class.alert-pulse]="store.globalMetrics().dead_letter_count > 0">
-      <span class="metric-label">Dead Letter</span>
-      <span class="metric-value accent-red">{{ store.globalMetrics().dead_letter_count }}</span>
-    </div>
-
-    <div class="metric-card">
-      <span class="metric-label">Failures</span>
-      <span class="metric-value accent-red">{{ store.globalMetrics().failure_count }}</span>
+      <span class="metric-label mono">DLQ Quarantined</span>
+      <span class="metric-value mono" [class.text-red]="store.globalMetrics().dead_letter_count > 0">
+        {{ store.globalMetrics().dead_letter_count }}
+      </span>
     </div>
   </div>
 
-  <!-- Node Health Summary -->
-  <div class="node-summary">
+  <!-- Node Health Summary Strip -->
+  <div class="node-summary-strip mono">
     <span class="node-pill healthy">
-      <span class="dot green"></span> {{ store.activeNodeCount() }} Healthy
-    </span>
-    <span class="node-pill stalled" *ngIf="false">
-      <span class="dot amber"></span> {{ store.stalledNodeCount() }} Stalled
+      <span class="dot green"></span> {{ store.activeNodeCount() }} Nodes Healthy
     </span>
     @if (store.stalledNodeCount() > 0) {
       <span class="node-pill stalled">
-        <span class="dot amber"></span> {{ store.stalledNodeCount() }} Stalled
+        <span class="dot amber"></span> {{ store.stalledNodeCount() }} Nodes Stalled (Watchdog Isolating)
       </span>
     }
     @if (store.offlineNodeCount() > 0) {
       <span class="node-pill offline">
-        <span class="dot red"></span> {{ store.offlineNodeCount() }} Offline
+        <span class="dot red"></span> {{ store.offlineNodeCount() }} Nodes Offline
       </span>
     }
+    <span class="active-model-summary">
+      Active Tensor Architecture: <strong>{{ store.selectedWhisperModel() }}</strong>
+    </span>
   </div>
 </section>

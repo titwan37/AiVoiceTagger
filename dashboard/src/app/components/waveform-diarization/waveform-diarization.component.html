@@ -1,0 +1,103 @@
+<div class="waveform-widget hud-panel">
+  <!-- Widget Top Bar -->
+  <div class="widget-header">
+    <div class="header-info">
+      <span class="icon-pulse">🎙️</span>
+      <div>
+        <h3 class="widget-title">
+          <span class="highlight-cyan">Live Waveform</span> & Forensic Diarization
+        </h3>
+        <p class="widget-subtitle mono">
+          Silero VAD Silence Stripping & 192-dim D-Vector Centroid Clustering
+        </p>
+      </div>
+    </div>
+
+    <!-- Active File Selector Dropdown / Badge -->
+    @if (activeEntry()) {
+      <div class="active-file-badge mono">
+        <span class="file-icon">📄</span>
+        <span class="file-name">{{ activeEntry()!.name }}</span>
+        <span class="duration-pill">{{ activeEntry()!.duration_seconds }}s</span>
+      </div>
+    }
+  </div>
+
+  <!-- Real-Time Waveform & VAD Canvas -->
+  <div class="canvas-container">
+    <canvas #waveformCanvas class="waveform-canvas"></canvas>
+    
+    <!-- Time Axis Overlay -->
+    <div class="canvas-overlay-axis mono">
+      <span>00:00</span>
+      <span>VAD Frame 01 (28s)</span>
+      <span>VAD Frame 02 (32s)</span>
+      <span>VAD Frame 03 (34s)</span>
+      <span>02:00</span>
+    </div>
+  </div>
+
+  <!-- Diarization Speaker Clusters & Acoustic Biomarkers Bar -->
+  <div class="forensics-hud-grid">
+    <!-- Speaker Diarization 192-dim Chips -->
+    <div class="speakers-panel">
+      <span class="panel-label mono">192-DIM D-VECTOR CLUSTERS</span>
+      <div class="speaker-chips">
+        @for (spk of diarizationClusters(); track spk.speaker_id) {
+          <div class="speaker-chip" [style.border-color]="spk.color">
+            <span class="chip-dot" [style.background]="spk.color" [style.box-shadow]="'0 0 8px ' + spk.color"></span>
+            <div class="chip-details">
+              <span class="chip-name">{{ spk.speaker_label }}</span>
+              <span class="chip-meta mono">Conf: {{(spk.confidence * 100).toFixed(0)}}% • Centroid: {{spk.centroid_norm.toFixed(2)}}</span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Live Acoustic Biomarkers HUD -->
+    <div class="biomarkers-panel">
+      <span class="panel-label mono">ACOUSTIC BIOMARKER SENSORS</span>
+      <div class="biomarkers-grid">
+        <!-- F0 Pitch -->
+        <div class="biomarker-card">
+          <span class="bio-label mono">Pitch (F0)</span>
+          <span class="bio-value mono highlight-cyan">{{ biomarkers().fundamental_pitch_f0.toFixed(1) }} <small>Hz</small></span>
+        </div>
+
+        <!-- Vocal Strain Index -->
+        <div class="biomarker-card">
+          <span class="bio-label mono">Vocal Strain</span>
+          <span class="bio-value mono" [class.text-red]="biomarkers().vocal_strain_index > 0.6" [class.text-amber]="biomarkers().vocal_strain_index > 0.4 && biomarkers().vocal_strain_index <= 0.6" [class.text-green]="biomarkers().vocal_strain_index <= 0.4">
+            {{ (biomarkers().vocal_strain_index * 100).toFixed(0) }}%
+          </span>
+        </div>
+
+        <!-- Speech Tempo (WPM) -->
+        <div class="biomarker-card">
+          <span class="bio-label mono">Tempo</span>
+          <span class="bio-value mono highlight-cuda">{{ biomarkers().speech_tempo_wpm }} <small>WPM</small></span>
+        </div>
+
+        <!-- SNR Dynamic Range -->
+        <div class="biomarker-card">
+          <span class="bio-label mono">SNR Ratio</span>
+          <span class="bio-value mono">{{ biomarkers().snr_db.toFixed(1) }} <small>dB</small></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Verbatim Forensic Story Extract -->
+  @if (activeEntry()) {
+    <div class="story-extract-box">
+      <div class="story-header">
+        <span class="story-tag mono">FORENSIC VERBATIM STREAM</span>
+        <span class="story-time mono">{{ activeEntry()!.updated_at | date:'HH:mm:ss' }}</span>
+      </div>
+      <p class="story-text">
+        "{{ activeEntry()!.story }}"
+      </p>
+    </div>
+  }
+</div>

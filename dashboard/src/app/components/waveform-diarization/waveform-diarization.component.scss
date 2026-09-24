@@ -1,0 +1,228 @@
+.waveform-widget {
+  padding: 18px 24px;
+  background: var(--surface-panel);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-lg);
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-pulse {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 8px var(--neon-cyan-glow));
+}
+
+.widget-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-pure);
+  margin: 0;
+
+  .highlight-cyan {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px var(--neon-cyan-glow);
+  }
+}
+
+.widget-subtitle {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.active-file-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-hud);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 0.78rem;
+
+  .file-name {
+    color: var(--neon-cyan);
+    font-weight: 600;
+  }
+
+  .duration-pill {
+    background: rgba(0, 242, 254, 0.1);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+}
+
+.canvas-container {
+  width: 100%;
+  position: relative;
+  background: #070a13;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+}
+
+.waveform-canvas {
+  width: 100%;
+  height: 160px;
+  display: block;
+}
+
+.canvas-overlay-axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: rgba(11, 15, 25, 0.9);
+  border-top: 1px solid rgba(56, 189, 248, 0.15);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.forensics-hud-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.speaker-chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.speaker-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-hud);
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  flex: 1;
+  min-width: 180px;
+
+  .chip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .chip-name {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-pure);
+  }
+
+  .chip-meta {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+  }
+}
+
+.biomarkers-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+
+  @media (max-width: 600px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.biomarker-card {
+  background: var(--surface-hud);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  .bio-label {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .bio-value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-pure);
+
+    small {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+  }
+
+  .highlight-cyan { color: var(--neon-cyan); text-shadow: 0 0 6px var(--neon-cyan-glow); }
+  .highlight-cuda { color: var(--cuda-green); text-shadow: 0 0 6px var(--cuda-green-glow); }
+  .text-green { color: var(--cuda-green); }
+  .text-amber { color: var(--vram-amber); }
+  .text-red { color: var(--alert-crimson); text-shadow: 0 0 8px var(--alert-crimson-glow); }
+}
+
+.story-extract-box {
+  background: var(--surface-hud);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+
+  .story-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+
+    .story-tag {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--neon-cyan);
+    }
+
+    .story-time {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+    }
+  }
+
+  .story-text {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    line-height: 1.5;
+    margin: 0;
+    font-style: italic;
+  }
+}
