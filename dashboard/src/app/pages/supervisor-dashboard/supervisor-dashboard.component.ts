@@ -10,6 +10,7 @@ import { TwoPhaseCommitModalComponent } from '../../components/two-phase-commit-
 import { DeadLetterExplorerComponent } from '../../components/dead-letter-explorer/dead-letter-explorer.component';
 import { InventoryOverviewComponent } from '../../components/inventory-overview/inventory-overview.component';
 import { PipelineStage, QualityGrade } from '../../models/telemetry.models';
+import { ForensicVisualizerComponent } from '../../visualizer/forensic-visualizer.component';
 
 @Component({
   selector: 'app-supervisor-dashboard',
@@ -25,6 +26,7 @@ import { PipelineStage, QualityGrade } from '../../models/telemetry.models';
     TwoPhaseCommitModalComponent,
     DeadLetterExplorerComponent,
     InventoryOverviewComponent,
+    ForensicVisualizerComponent,
   ],
   templateUrl: './supervisor-dashboard.component.html',
   styleUrl: './supervisor-dashboard.component.scss',
@@ -32,7 +34,7 @@ import { PipelineStage, QualityGrade } from '../../models/telemetry.models';
 export class SupervisorDashboardComponent {
   store = inject(TelemetryStore);
 
-  activeTab = signal<'nodes' | 'pipeline_dag' | 'diarization' | 'dead_letters' | 'inventory'>('nodes');
+  activeTab = signal<'nodes' | 'dead_letters' | 'transcripts' | 'inventory' | 'visualizer'>('nodes');
 
   readonly stages: (PipelineStage | 'ALL')[] = [
     'ALL', 'DISCOVERED', 'QUEUED', 'DECODED', 'TRANSCRIBED', 'NLP_DONE', 'EXPORTED', 'DONE', 'DEAD_LETTER', 'FAILED',
@@ -40,7 +42,7 @@ export class SupervisorDashboardComponent {
 
   readonly aqiOptions: (QualityGrade | 'ALL')[] = ['ALL', 'GOOD', 'DEGRADED', 'UNUSABLE'];
 
-  setTab(tab: 'nodes' | 'pipeline_dag' | 'diarization' | 'dead_letters' | 'inventory'): void {
+  setTab(tab: 'nodes' | 'dead_letters' | 'transcripts' | 'inventory' | 'visualizer'): void {
     this.activeTab.set(tab);
   }
 

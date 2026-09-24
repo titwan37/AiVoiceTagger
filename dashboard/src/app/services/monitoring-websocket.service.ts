@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, Subject, interval } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { switchMap, takeUntil } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
   TelemetryPayload, GlobalMetrics, NodeTelemetry, NodeHealth,
@@ -13,6 +13,7 @@ import {
 export class MonitoringWebSocketService {
   private destroy$ = new Subject<void>();
   private messagesSubject = new Subject<TelemetryPayload>();
+
   private isPaused = false;
   private currentModel: WhisperModelVariant = 'whisper-large-v3';
 
@@ -25,8 +26,9 @@ export class MonitoringWebSocketService {
 
   constructor() {
     if (environment.useMockData) {
-      this.startMockStream();
+      // Mock mode
     } else {
+      // ONLY start HTTP polling to prevent stream death
       this.startHttpPolling();
     }
   }
@@ -420,17 +422,6 @@ export class MonitoringWebSocketService {
   }
 
   async sendCommand(endpoint: string, payload: any = {}): Promise<any> {
-    if (environment.useMockData) {
-      if (endpoint === 'pause') {
-        this.isPaused = !this.isPaused;
-        return { status: 'ok', is_paused: this.isPaused };
-      }
-      if (endpoint === 'retry') {
-        return { status: 'ok', message: `Record ${payload.record_id || 'ID'} re-queued successfully` };
-      }
-      return { status: 'ok' };
-    }
-
     try {
       const res = await fetch(`${environment.apiUrl}/api/control/${endpoint}`, {
         method: 'POST',

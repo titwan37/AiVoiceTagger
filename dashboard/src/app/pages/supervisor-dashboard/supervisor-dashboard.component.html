@@ -67,6 +67,13 @@
         (click)="setTab('inventory')">
         📦 Inventory Intelligence
       </button>
+      <button 
+        (click)="setTab('visualizer')" 
+        [style.background]="activeTab() === 'visualizer' ? '#a855f7' : 'transparent'"
+        [style.color]="activeTab() === 'visualizer' ? 'white' : '#9ca3af'"
+        style="border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease;">
+        🌌 3D Constellation
+      </button>
     </div>
   </section>
 
@@ -147,6 +154,13 @@
     <app-two-phase-commit-modal
       [verification]="store.twoPhaseCommit()"
       (closed)="store.closeTwoPhaseCommitModal()" />
+  }
+
+  <!-- TAB 5: 3D FORENSIC VISUALIZER -->
+  @if (activeTab() === 'visualizer') {
+    <section class="section-block" style="margin-top: 16px;">
+      <app-forensic-visualizer />
+    </section>
   }
 
   <!-- Command Center Footer -->

@@ -11,6 +11,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sqlite3
 import subprocess
 import shutil
@@ -104,6 +105,9 @@ class VoiceBiometricEngine:
         self.ambiguity_margin = ambiguity_margin
         self.verbose = verbose
         self.actor_thresholds = actor_thresholds or {}
+        self.actor_start_years = {
+            "Dinda": 2020,
+        }
         
         if not self.db_path.exists():
             raise FileNotFoundError(f"Database not found at {self.db_path}")
@@ -346,19 +350,43 @@ class VoiceBiometricEngine:
         # 1. RMS Energy
         rms = float(np.sqrt(np.mean(np.square(pcm_samples))))
 
-        # 2. Approximate F0 pitch via ultra-fast 2048-point frame FFT autocorrelation
-        mid = len(pcm_samples) // 2
-        frame = pcm_samples[max(0, mid - 1024) : min(len(pcm_samples), mid + 1024)]
-        n_frame = len(frame)
-        fft_sig = np.fft.fft(frame, n=2048)
-        corr = np.fft.ifft(fft_sig * np.conj(fft_sig)).real[:n_frame]
-        d = np.diff(corr)
-        start = np.where(d > 0)[0]
-        if len(start) > 0:
-            peak = np.argmax(corr[start[0]:]) + start[0]
-            f0 = float(samplerate / peak) if peak > 0 else 0.0
-            # Human speech pitch constraint (60 Hz to 450 Hz)
-            f0 = f0 if 60.0 <= f0 <= 450.0 else 150.0
+        # 2. Approximate F0 pitch via multi-frame autocorrelation in human speech range (60-450 Hz)
+        pitches = []
+        n_samples = len(pcm_samples)
+        frame_len = 2048
+        
+        # Sample up to 5 points across the speech segment to find voiced segments
+        for pct in [0.2, 0.4, 0.5, 0.6, 0.8]:
+            idx = int(pct * n_samples)
+            frame = pcm_samples[max(0, idx - frame_len // 2) : min(n_samples, idx + frame_len // 2)]
+            if len(frame) < frame_len:
+                continue
+            
+            # Remove DC offset to prevent slow-decay envelope
+            frame = frame - np.mean(frame)
+            
+            fft_sig = np.fft.fft(frame, n=2048)
+            corr = np.fft.ifft(fft_sig * np.conj(fft_sig)).real[:len(frame)]
+            if corr[0] <= 0:
+                continue
+            corr = corr / corr[0]
+            
+            min_lag = 35
+            max_lag = min(len(frame) - 1, 266)
+            if max_lag > min_lag:
+                search_region = corr[min_lag:max_lag]
+                peak = np.argmax(search_region) + min_lag
+                
+                # Verify that it is a true local maximum and has significant autocorrelation energy
+                if peak > min_lag and peak < max_lag - 1:
+                    if corr[peak] > corr[peak - 1] and corr[peak] > corr[peak + 1]:
+                        if corr[peak] > 0.20:
+                            f0_candidate = float(samplerate / peak)
+                            if 60.0 <= f0_candidate <= 450.0:
+                                pitches.append(f0_candidate)
+                                
+        if pitches:
+            f0 = float(np.median(pitches))
         else:
             f0 = 150.0
 
@@ -378,6 +406,31 @@ class VoiceBiometricEngine:
             speech_rate_wpm=round(wpm, 1),
         )
 
+    def compute_multi_centroids(
+        self, sample_embeddings: List[np.ndarray], max_clusters: int = 5
+    ) -> np.ndarray:
+        """Clusters sample embeddings into at most max_clusters centroids using K-Means."""
+        X = np.array(sample_embeddings)
+        n_samples = len(X)
+        if n_samples <= max_clusters:
+            centroids = X
+        else:
+            try:
+                from sklearn.cluster import KMeans
+                n_clusters = min(max_clusters, n_samples)
+                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+                kmeans.fit(X)
+                centroids = kmeans.cluster_centers_
+            except Exception as e:
+                logger.warning(f"K-Means clustering failed ({e}). Falling back to simple average.")
+                mean_vector = np.mean(X, axis=0, keepdims=True)
+                centroids = mean_vector
+
+        # L2-normalize each centroid
+        norms = np.linalg.norm(centroids, axis=1, keepdims=True)
+        centroids = np.where(norms > 0, centroids / norms, centroids)
+        return centroids.astype(np.float32)
+
     def enroll_voice_vault(self, force_recompute: bool = False) -> Dict[str, np.ndarray]:
         """Scans profiles/<Actor_Name>/*.wav to compute canonical D-Vector centroids."""
         self.apply_schema_migrations()
@@ -393,8 +446,8 @@ class VoiceBiometricEngine:
             cursor.execute("SELECT actor_id, display_name, embedding_blob FROM speaker_profiles;")
             for row in cursor.fetchall():
                 emb = np.frombuffer(row["embedding_blob"], dtype=np.float32)
-                if len(emb) == expected_dim:
-                    self.enrolled_vault[row["actor_id"]] = emb
+                if len(emb) % expected_dim == 0 and len(emb) > 0:
+                    self.enrolled_vault[row["actor_id"]] = emb.reshape(-1, expected_dim)
             if self.enrolled_vault:
                 logger.info(f"Loaded {len(self.enrolled_vault)} enrolled actors from database cache ({expected_dim}-dim embeddings).")
             else:
@@ -425,11 +478,8 @@ class VoiceBiometricEngine:
                         logger.warning(f"Failed to extract embedding from {audio_path.name}: {e}")
 
                 if sample_embeddings:
-                    centroid = np.mean(sample_embeddings, axis=0)
-                    norm = np.linalg.norm(centroid)
-                    centroid = (centroid / norm) if norm > 0 else centroid
-
-                    self.enrolled_vault[actor_name] = centroid
+                    centroids = self.compute_multi_centroids(sample_embeddings, max_clusters=5)
+                    self.enrolled_vault[actor_name] = centroids
 
                     # Store in database
                     cursor.execute(
@@ -441,11 +491,11 @@ class VoiceBiometricEngine:
                             actor_name,
                             actor_name,
                             len(sample_embeddings),
-                            centroid.astype(np.float32).tobytes(),
+                            centroids.tobytes(),
                             datetime.now().isoformat(),
                         ),
                     )
-                    logger.info(f"  └── Enrolled [{actor_name}]: {len(sample_embeddings)} samples -> Centroid computed.")
+                    logger.info(f"  └── Enrolled [{actor_name}]: {len(sample_embeddings)} samples -> {len(centroids)} centroids computed.")
 
         conn.commit()
         conn.close()
@@ -474,11 +524,14 @@ class VoiceBiometricEngine:
         conn = self._get_connection()
         cursor = conn.cursor()
 
+        expected_dim = 192 if (self.classifier is not None and HAS_TORCH) else 129
         # Load original sample counts and centroids
         cursor.execute("SELECT actor_id, sample_count, embedding_blob FROM speaker_profiles;")
         profile_info = {}
         for row in cursor.fetchall():
             emb = np.frombuffer(row["embedding_blob"], dtype=np.float32)
+            if len(emb) % expected_dim == 0 and len(emb) > 0:
+                emb = emb.reshape(-1, expected_dim)
             profile_info[row["actor_id"]] = {
                 "sample_count": row["sample_count"],
                 "embedding": emb
@@ -564,16 +617,22 @@ class VoiceBiometricEngine:
                 logger.info(f"  └── [{actor}]: Failed to extract new embeddings from any of the {len(rows)} segments.")
                 continue
 
-            # Calculate enriched centroid
+            # Calculate enriched centroids using the pooled set of original centroids + new embeddings
             orig_data = profile_info.get(actor, {"sample_count": 4, "embedding": self.enrolled_vault[actor]})
             orig_count = orig_data["sample_count"]
             orig_emb = orig_data["embedding"]
 
-            combined_sum = (orig_emb * orig_count) + np.sum(new_embeddings, axis=0)
+            # Reconstruct the pool of vectors
+            pool = []
+            if orig_emb.ndim == 1:
+                pool.append(orig_emb)
+            else:
+                pool.extend(list(orig_emb))
+            pool.extend(new_embeddings)
+
+            # Compute new centroids from the pool
+            new_centroids = self.compute_multi_centroids(pool, max_clusters=5)
             new_count = orig_count + len(new_embeddings)
-            new_centroid = combined_sum / new_count
-            norm = np.linalg.norm(new_centroid)
-            new_centroid = (new_centroid / norm) if norm > 0 else new_centroid
 
             # Update speaker_profiles table
             cursor.execute(
@@ -581,12 +640,12 @@ class VoiceBiometricEngine:
                 INSERT OR REPLACE INTO speaker_profiles (actor_id, display_name, sample_count, embedding_blob, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (actor, actor, new_count, new_centroid.astype(np.float32).tobytes(), datetime.now().isoformat())
+                (actor, actor, new_count, new_centroids.tobytes(), datetime.now().isoformat())
             )
 
-            self.enrolled_vault[actor] = new_centroid
+            self.enrolled_vault[actor] = new_centroids
             enrichment_stats[actor] = len(new_embeddings)
-            logger.info(f"  └── 🎉 Enriched [{actor}] with {len(new_embeddings)} segments. Centroid updated (total samples: {new_count}).")
+            logger.info(f"  └── 🎉 Enriched [{actor}] with {len(new_embeddings)} segments. Centroids updated (total samples: {new_count}, centroids: {len(new_centroids)}).")
 
         conn.commit()
         conn.close()
@@ -604,10 +663,13 @@ class VoiceBiometricEngine:
         second_best_score = -1.0
 
         for actor, ref_emb in self.enrolled_vault.items():
-            if query_emb.shape != ref_emb.shape:
-                continue
-            # Standard cosine similarity for L2-normalized vectors
-            score = float(np.dot(query_emb, ref_emb))
+            # Support both 1D (legacy single centroid) and 2D (multi-centroid matrix) reference shapes
+            if ref_emb.ndim == 1:
+                score = float(np.dot(query_emb, ref_emb))
+            else:
+                scores = np.dot(ref_emb, query_emb)
+                score = float(np.max(scores))
+
             if score > best_score:
                 second_best_score = best_score
                 second_best_actor = best_actor
@@ -767,6 +829,12 @@ class VoiceBiometricEngine:
                 rec_name = row["name"]
                 audio_path = Path(row["directory"]) / rec_name
 
+                # Parse year from filename to enforce timeline constraints
+                record_year = None
+                year_match = re.search(r"\b(20\d{2})\b", rec_name)
+                if year_match:
+                    record_year = int(year_match.group(1))
+
                 if not audio_path.exists():
                     audio_path = Path(rec_name)
                     if not audio_path.exists():
@@ -833,10 +901,18 @@ class VoiceBiometricEngine:
 
                 for (speech_id, word_count, slice_pcm), emb in zip(speech_items, embeddings):
                     match = self.match_speaker(emb)
+                    clean_actor = match.actor_tag.replace("_AMBIGUOUS", "")
+                    
+                    # Apply actor timeline constraints (e.g. Dinda did not exist before 2020)
+                    if record_year is not None and clean_actor in self.actor_start_years:
+                        start_year = self.actor_start_years[clean_actor]
+                        if record_year < start_year:
+                            match = MatchResult("SPEAKER_THIRD_PARTY", match.confidence, match.is_ambiguous)
+                            clean_actor = "SPEAKER_THIRD_PARTY"
+
                     biomarkers = self.compute_acoustic_biomarkers(slice_pcm, sr, word_count)
                     stress_values.append(biomarkers.vocal_strain_index)
 
-                    clean_actor = match.actor_tag.replace("_AMBIGUOUS", "")
                     if "SPEAKER_" not in clean_actor:
                         record_actors.add(clean_actor)
 

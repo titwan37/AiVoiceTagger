@@ -8,7 +8,7 @@ hardware:
 
 scanner:
   input_directory: "\\\\SyNAS\\Records"
-  input_manifest: "inventory_manifest.csv"
+  input_manifest: "inventory_manifest2.csv"
   excluded_extensions: [".xlsx", ".csv", ".json", ".tmp", ".bak", ".txt", ".md", ".zip", ".pdf", ".py", ".iso", ".db", ".docx"]
   excluded_directories: ["#recycle", "recycle", "temp", "tmp", ".Trash"]
   recursive: true
