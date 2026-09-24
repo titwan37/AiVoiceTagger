@@ -33,6 +33,7 @@ aivoicetagger_state.db
 !/records_sample/.gitkeep
 /exports/
 *.parquet
+*.wav
 
 # Python / Sidecar
 __pycache__/
@@ -52,4 +53,17 @@ ENV/
 .vscode/
 .DS_Store
 Thumbs.db
-dashboard/.angular/cache/21.2.19/aivoicetagger-dashboard/vite/deps/_metadata.json
+.angular/cache/
+dist/
+
+# Build output and executables
+*.exe
+
+# Logs, data, and scratchpad
+*.log
+*.csv
+scratch/
+desktop.ini
+db_analysis.txt
+
+dashboard/dist/

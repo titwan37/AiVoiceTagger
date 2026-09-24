@@ -4,13 +4,13 @@ Drop 1 to 5 clear audio samples (3 to 10 seconds, single speaker, `.wav`, `.mp3`
 
 ```text
 profiles/
-├── AF/
+├── Antoine/
 │   ├── sample_call_01.wav
 │   └── sample_meeting_02.wav
-├── CA/
+├── Catajou/
 │   ├── sample_argument_01.wav
 │   └── sample_discussion_02.wav
-└── AL/
+└── Alois/
     └── sample_reading_01.wav
 ```
 

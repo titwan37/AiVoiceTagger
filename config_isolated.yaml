@@ -3,7 +3,7 @@
 scanner:
   input_directory: "\\\\SyNAS\\Records"
   input_manifest: "inventory_manifest.csv"
-  excluded_extensions: [".xlsx", ".csv", ".json", ".tmp", ".bak"]
+  excluded_extensions: [".xlsx", ".csv", ".json", ".tmp", ".bak", ".txt", ".md", ".zip", ".pdf", ".py", ".iso", ".db", ".docx"]
   excluded_directories: ["#recycle", "recycle", "temp", "tmp", ".Trash"]
   recursive: true
   min_file_size_bytes: 1024
@@ -24,11 +24,11 @@ stt:
   no_context: true # Prevents previous context from feeding repeating hallucination loops
   temperature: 0.0 # Suppress temperature escalation when stuck
   logprob_thold: -1.0 # Set strict logprob threshold to bail out on bad audio
-  provider: "parakeet" # options: "parakeet", "whisper", "auto"
+  provider: "whisper" # options: "whisper", "auto"
   model_path: "models/ggml-small-q8_0.bin"
   parakeet_model_path: "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/model.int8.onnx"
   diarization_enabled: true
-  language: "fr"
+  language: "auto"
   workers: 4
   threads_per_worker: 3
   beam_size: 1

@@ -18,6 +18,10 @@ import logging
 import math
 import sqlite3
 import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -96,24 +100,25 @@ def generate_3d_constellation(
     cursor.execute("PRAGMA table_info(records);")
     rec_cols = [row["name"] for row in cursor.fetchall()]
     id_col = "record_id" if "record_id" in rec_cols else "id"
-    name_col = "name" if "name" in rec_cols else ("file_name" if "file_name" in rec_cols else f"'{id_col}' AS file_name")
-    dir_col = "directory" if "directory" in rec_cols else ("file_path" if "file_path" in rec_cols else "'' AS file_path")
-    aqi_col = "aqi_grade" if "aqi_grade" in rec_cols else "'' AS aqi_grade"
+    name_col = "name" if "name" in rec_cols else ("file_name" if "file_name" in rec_cols else f"'{id_col}'")
+    dir_col = "directory" if "directory" in rec_cols else ("file_path" if "file_path" in rec_cols else "''")
+    aqi_col = "aqi_grade" if "aqi_grade" in rec_cols else "''"
 
     cursor.execute("PRAGMA table_info(speeches);")
     speech_cols = [row["name"] for row in cursor.fetchall()]
-    text_col = "script" if "script" in speech_cols else ("text" if "text" in speech_cols else "'' AS text")
+    text_col = "script" if "script" in speech_cols else ("text" if "text" in speech_cols else "''")
     
+    fallback_spk = ", speaker" if "speaker" in speech_cols else ""
     if anonymize:
         if "speaker_anonymized" in speech_cols:
-            speaker_col = "COALESCE(speaker_anonymized, speaker, 'Speaker 01')"
+            speaker_col = f"COALESCE(speaker_anonymized{fallback_spk}, 'Speaker 01')"
         else:
             speaker_col = "speaker" if "speaker" in speech_cols else "'Speaker 01'"
     else:
         if "speaker_disclosed" in speech_cols:
-            speaker_col = "COALESCE(speaker_disclosed, speaker_tag, speaker_anonymized, speaker, 'Speaker 01')"
+            speaker_col = f"COALESCE(speaker_disclosed, speaker_tag, speaker_anonymized{fallback_spk}, 'Speaker 01')"
         elif "speaker_tag" in speech_cols:
-            speaker_col = "COALESCE(speaker_tag, speaker, 'Speaker 01')"
+            speaker_col = f"COALESCE(speaker_tag{fallback_spk}, 'Speaker 01')"
         else:
             speaker_col = "speaker" if "speaker" in speech_cols else "'Speaker 01'"
 

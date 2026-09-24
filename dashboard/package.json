@@ -15,8 +15,6 @@
     "ng": "ng",
     "start": "ng serve --open",
     "build": "ng build",
-    "build:sim": "ng build --configuration sim --base-href /aivoicetagger/",
-    "build:prod": "ng build --configuration production --base-href /aivoicetagger/",
     "dev": "ng serve --open"
   },
   "private": true,
